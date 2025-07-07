@@ -1,9 +1,7 @@
-# signals.py - Automatic processing
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from apps.load.models.csv_import import GoogleSheetsImport
 import logging
-
 logger = logging.getLogger(__name__)
 @receiver(post_save, sender=GoogleSheetsImport)
 def process_import_automatically(sender, instance, created, **kwargs):

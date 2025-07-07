@@ -1,3 +1,4 @@
+
 # models.py - GoogleSheetsImport modeli qo'shish
 from django.db import models
 from django.core.exceptions import ValidationError
@@ -6,6 +7,8 @@ import logging
 from datetime import datetime
 from django.db import transaction
 from apps.load.models.load import Load
+from apps.load.models.stops import Stops
+
 logger = logging.getLogger(__name__)
 
 class GoogleSheetsImport(models.Model):
@@ -117,6 +120,12 @@ class GoogleSheetsImport(models.Model):
     
     def _extract_load_data(self, row):
         """Qatordan Load uchun ma'lumotlarni ajratib olish"""
+        from .dispatcher import Dispatcher
+        from .driver import Driver
+        from .truck import Unit
+        from .customerbroker import CustomerBroker
+        from apps.auth.models import User
+        
         load_data = {}
         
         # Blackhawks load number -> load_id
@@ -126,17 +135,29 @@ class GoogleSheetsImport(models.Model):
         # Dispatch name -> dispatcher
         dispatch_name = row.get('Dispatch name', '').strip()
         if dispatch_name in self.DISPATCHER_MAPPING:
-            load_data['dispatcher_id'] = self.DISPATCHER_MAPPING[dispatch_name]
+            try:
+                dispatcher_obj = Dispatcher.objects.get(id=self.DISPATCHER_MAPPING[dispatch_name])
+                load_data['dispatcher'] = dispatcher_obj
+            except Dispatcher.DoesNotExist:
+                logger.warning(f"Dispatcher ID {self.DISPATCHER_MAPPING[dispatch_name]} topilmadi")
         
         # Unit № -> unit_id
         unit_num = str(row.get('Unit №', '')).strip()
         if unit_num in self.UNIT_MAPPING:
-            load_data['unit_id'] = self.UNIT_MAPPING[unit_num]
+            try:
+                unit_obj = Unit.objects.get(id=self.UNIT_MAPPING[unit_num])
+                load_data['unit_id'] = unit_obj
+            except Unit.DoesNotExist:
+                logger.warning(f"Unit ID {self.UNIT_MAPPING[unit_num]} topilmadi")
         
         # Driver -> driver
         driver_name = row.get('Assiged trailer Driver', '').strip()
         if driver_name in self.DRIVER_MAPPING:
-            load_data['driver_id'] = self.DRIVER_MAPPING[driver_name]
+            try:
+                driver_obj = Driver.objects.get(id=self.DRIVER_MAPPING[driver_name])
+                load_data['driver'] = driver_obj
+            except Driver.DoesNotExist:
+                logger.warning(f"Driver ID {self.DRIVER_MAPPING[driver_name]} topilmadi")
         
         # Load № -> trip_id
         if pd.notna(row.get('Load №')):
@@ -153,50 +174,6 @@ class GoogleSheetsImport(models.Model):
                 load_data['total_pay'] = rate_value
             except (ValueError, TypeError):
                 pass
-        
-        # DeadHead -> empty_mile
-        if pd.notna(row.get('DeadHead')):
-            try:
-                load_data['empty_mile'] = int(row['DeadHead'])
-            except (ValueError, TypeError):
-                pass
-        
-        # Loaded mile -> mile
-        if pd.notna(row.get('Loaded mile')):
-            try:
-                load_data['mile'] = int(row['Loaded mile'])
-            except (ValueError, TypeError):
-                pass
-        
-        # $ per mile -> per_mile
-        if pd.notna(row.get('$ per mile')):
-            try:
-                per_mile_value = float(str(row['$ per mile']).replace('$', '').replace(',', ''))
-                load_data['per_mile'] = per_mile_value
-            except (ValueError, TypeError):
-                pass
-        
-        # Broker -> customer_broker (har doim 1)
-        if pd.notna(row.get('Broker')):
-            load_data['customer_broker_id'] = 1
-        
-        # NOTE -> note
-        if pd.notna(row.get('NOTE')):
-            load_data['note'] = str(row['NOTE'])
-        
-        # Pick up Address -> pickup_location
-        if pd.notna(row.get(' Pick up 🏭 Address')):
-            load_data['pickup_location'] = str(row[' Pick up 🏭 Address'])
-        
-        # Delivery Address -> delivery_location
-        if pd.notna(row.get('Delivery Address for Last Stop')):
-            load_data['delivery_location'] = str(row['Delivery Address for Last Stop'])
-        
-        # Default values
-        load_data['load_status'] = 'OPEN'
-        load_data['created_by_id'] = 1  # Default user
-        
-        return load_data
     
     def _extract_stops_data(self, row, load):
         """Qatordan Stops uchun ma'lumotlarni ajratib olish"""
@@ -316,4 +293,3 @@ class GoogleSheetsImport(models.Model):
     class Meta:
         verbose_name = "Google Sheets Import"
         verbose_name_plural = "Google Sheets Imports"
-
