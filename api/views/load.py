@@ -493,6 +493,8 @@ class DriverPayCreateView(APIView):
         notes = request.data.get('notes', '')
         invoice_number = request.data.get('invoice_number')  # NEW: Get invoice_number from POST
         weekly_number = request.data.get('weekly_number')    # NEW: Get weekly_number from POST
+        load_driver_pay_ids = request.data.get('load_driver_pay', [])  # NEW: Load IDs for driver pay
+        load_company_driver_pay_ids = request.data.get('load_company_driver_pay', [])
 
         # Sana formatini tekshirish va konvertatsiya qilish
         try:
@@ -527,7 +529,7 @@ class DriverPayCreateView(APIView):
             updated_at=datetime.now()
         )
         driver_pay.save()
-
+        load_driver_pay = Load.objects.filter(id__in=load_driver_pay_ids) if load_driver_pay_ids else Load.objects.none()
         # FIXED: Changed annotation names to avoid conflicts with existing model fields
         loads_with_dates = Load.objects.filter(
             driver=driver,
@@ -547,7 +549,8 @@ class DriverPayCreateView(APIView):
             Q(calculated_delivery_date__date__gte=pay_from_date, calculated_delivery_date__date__lte=pay_to_date) |  # Delivery in period
             Q(calculated_pickup_date__date__lte=pay_from_date, calculated_delivery_date__date__gte=pay_to_date)  # Period within load span
         ).distinct()
-
+        if load_driver_pay.exists():
+            filtered_loads = (filtered_loads | load_driver_pay).distinct()
         # Hisoblash va natijani tayyorlash
         total_pay = 0.0
         total_load_pays = 0.0
@@ -755,6 +758,8 @@ class DriverPayCreateView(APIView):
 
         driver_pay.loads = load_details
         driver_pay.amount = total_pay
+        if load_driver_pay.exists():
+            driver_pay.load_driver_pay.set(load_driver_pay)
         driver_pay.save()
 
         # Driver ma'lumotlari
@@ -831,9 +836,12 @@ class DriverPayCreateView(APIView):
         # Company Driver uchun qo'shimcha hisob-kitob
         if driver.driver_type == 'COMPANY_DRIVER':
             # Company Driver uchun miles va pay hisoblash
+            load_company_driver_pay = Load.objects.filter(id__in=load_company_driver_pay_ids) if load_company_driver_pay_ids else Load.objects.none()
             cd_loads_data = []
             total_miles = 0
-            
+            company_driver_filtered_loads = filtered_loads
+            if load_company_driver_pay.exists():
+                company_driver_filtered_loads = (company_driver_filtered_loads | load_company_driver_pay).distinct()
             for load in filtered_loads:
                 # Get loaded miles from load.mile field
                 loaded_miles = load.mile if load.mile else 0
@@ -866,6 +874,8 @@ class DriverPayCreateView(APIView):
             driver_pay.total_miles = total_miles
             driver_pay.miles_rate = miles_rate
             driver_pay.company_driver_pay = company_driver_pay
+            if load_company_driver_pay.exists():
+                driver_pay.load_company_driver_pay.set(load_company_driver_pay)
             driver_pay.company_driver_data = {
                 'loads': cd_loads_data,
                 'total_miles': total_miles,

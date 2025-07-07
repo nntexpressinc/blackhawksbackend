@@ -4,7 +4,7 @@ from .truck import Truck
 from .trailer import Trailer
 from .dispatcher import Dispatcher
 from django.conf import settings
-
+from apps.load.models.load import Load
 class DriverTags(models.Model):
     tag = models.CharField(max_length=50, blank=True, null=True)
 
@@ -171,8 +171,8 @@ class DriverPay(models.Model):
     weekly_number = models.CharField(max_length=100, blank=True, null=True)
     total_miles = models.FloatField(blank=True, null=True)  # Yangi field
     miles_rate = models.FloatField(blank=True, null=True)  # Yangi field
-
-
+    load_driver_pay = models.ManyToManyField('Load', related_name='load_driver_pay', blank=True, null=True)  # Yangi field
+    load_company_driver_pay = models.ManyToManyField('Load', related_name='load_company_driver_pay', blank=True, null=True)  # Yangi field
     def __str__(self):
         return f"DriverPay {self.id} for {self.driver}"
     
