@@ -491,9 +491,9 @@ class DriverPayCreateView(APIView):
         pay_to = request.data.get('pay_to')
         driver_id = request.data.get('driver')
         notes = request.data.get('notes', '')
-        invoice_number = request.data.get('invoice_number')  # NEW: Get invoice_number from POST
-        weekly_number = request.data.get('weekly_number')    # NEW: Get weekly_number from POST
-        load_driver_pay_ids = request.data.get('load_driver_pay', [])  # NEW: Load IDs for driver pay
+        invoice_number = request.data.get('invoice_number')
+        weekly_number = request.data.get('weekly_number')
+        load_driver_pay_ids = request.data.get('load_driver_pay', [])
         load_company_driver_pay_ids = request.data.get('load_company_driver_pay', [])
 
         # Sana formatini tekshirish va konvertatsiya qilish
@@ -523,18 +523,18 @@ class DriverPayCreateView(APIView):
             pay_to=pay_to_date,
             amount=0.0,
             notes=notes,
-            invoice_number=invoice_number,  # NEW: Save invoice_number
-            weekly_number=weekly_number,    # NEW: Save weekly_number
+            invoice_number=invoice_number,
+            weekly_number=weekly_number,
             created_at=datetime.now(),
             updated_at=datetime.now()
         )
         driver_pay.save()
-        load_driver_pay = Load.objects.filter(id__in=load_driver_pay_ids) if load_driver_pay_ids else Load.objects.none()
-        # FIXED: Changed annotation names to avoid conflicts with existing model fields
+        
+        # Asosiy filterlangan loadlar
         loads_with_dates = Load.objects.filter(
             driver=driver,
             stop__appointmentdate__isnull=False,
-            invoice_status='Paid'  # Only include loads with invoice_status Paid
+            invoice_status='Paid'
         ).annotate(
             calculated_pickup_date=Min('stop__appointmentdate', filter=Q(stop__stop_name='PICKUP')),
             calculated_delivery_date=Max('stop__appointmentdate', filter=Q(stop__stop_name='DELIVERY'))
@@ -543,14 +543,34 @@ class DriverPayCreateView(APIView):
             calculated_delivery_date__isnull=False
         )
 
-        # Filter loads based on overlap with pay period using new annotation names
+        # Filter loads based on overlap with pay period
         filtered_loads = loads_with_dates.filter(
-            Q(calculated_pickup_date__date__gte=pay_from_date, calculated_pickup_date__date__lte=pay_to_date) |  # Pickup in period
-            Q(calculated_delivery_date__date__gte=pay_from_date, calculated_delivery_date__date__lte=pay_to_date) |  # Delivery in period
-            Q(calculated_pickup_date__date__lte=pay_from_date, calculated_delivery_date__date__gte=pay_to_date)  # Period within load span
+            Q(calculated_pickup_date__date__gte=pay_from_date, calculated_pickup_date__date__lte=pay_to_date) |
+            Q(calculated_delivery_date__date__gte=pay_from_date, calculated_delivery_date__date__lte=pay_to_date) |
+            Q(calculated_pickup_date__date__lte=pay_from_date, calculated_delivery_date__date__gte=pay_to_date)
         ).distinct()
-        if load_driver_pay.exists():
-            filtered_loads = (filtered_loads | load_driver_pay).distinct()
+
+        # 1. load_driver_pay_ids dan qo'shimcha loadlarni qo'shish
+        additional_driver_loads = Load.objects.none()
+        if load_driver_pay_ids:
+            additional_driver_loads = Load.objects.filter(
+                id__in=load_driver_pay_ids,
+                driver=driver,
+                invoice_status='Paid'
+            ).annotate(
+                calculated_pickup_date=Min('stop__appointmentdate', filter=Q(stop__stop_name='PICKUP')),
+                calculated_delivery_date=Max('stop__appointmentdate', filter=Q(stop__stop_name='DELIVERY'))
+            )
+            
+            # Asosiy filterlangan loadlar bilan birlashtirish
+            filtered_loads = filtered_loads.union(additional_driver_loads).distinct()
+
+        # ManyToMany fieldlarni saqlash
+        if load_driver_pay_ids:
+            driver_pay.load_driver_pay.set(load_driver_pay_ids)
+        if load_company_driver_pay_ids:
+            driver_pay.load_company_driver_pay.set(load_company_driver_pay_ids)
+
         # Hisoblash va natijani tayyorlash
         total_pay = 0.0
         total_load_pays = 0.0
@@ -559,7 +579,7 @@ class DriverPayCreateView(APIView):
         chargebag_deductions = []
         total_loads_formula = []
         total_other_pays_formula = []
-        total_chargebag_amount = 0.0  # FIXED: Track total chargebag separately
+        total_chargebag_amount = 0.0
 
         for load in filtered_loads:
             load_payment = 0.0
@@ -580,7 +600,6 @@ class DriverPayCreateView(APIView):
                     amount = float(other_pay.amount)
                     
                     if other_pay.pay_type in ['DETENTION', 'LAYOVER']:
-                        # DETENTION va LAYOVER: standart foiz bilan hisoblanadi va qo'shiladi
                         amount_with_percentage = amount * (float(pay.standart) / 100) if pay.standart else amount
                         load_payment += amount_with_percentage
                         total_other_pays += amount_with_percentage
@@ -592,10 +611,9 @@ class DriverPayCreateView(APIView):
                             "note": other_pay.note if other_pay.note else ''
                         }
                     elif other_pay.pay_type == 'CHARGEBACK':
-                        # CHARGEBACK: ayiriladi (deduction) - FIXED: subtract from load_payment
                         load_chargebag_amount += amount
                         total_chargebag_amount += amount
-                        load_payment -= amount  # FIX: Subtract from individual load payment
+                        load_payment -= amount
                         chargebag_deductions.append({
                             "load_id": load.load_id,
                             "amount": f"${amount:.2f}",
@@ -609,7 +627,6 @@ class DriverPayCreateView(APIView):
                             "note": other_pay.note if other_pay.note else ''
                         }
                     elif other_pay.pay_type in ['EQUIPMENT', 'LUMPER', 'DRIVERASSIST', 'TRAILERWASH', 'ESCORTFEE', 'BONUS', 'OTHER']:
-                        # Boshqa barcha payment typelar: to'g'ridan-to'g'ri qo'shiladi
                         load_payment += amount
                         total_other_pays += amount
                         total_other_pays_formula.append(f"${amount:.2f}")
@@ -620,7 +637,6 @@ class DriverPayCreateView(APIView):
                             "note": other_pay.note if other_pay.note else ''
                         }
                     else:
-                        # Noma'lum payment typelar uchun default behavior
                         load_payment += amount
                         total_other_pays += amount
                         total_other_pays_formula.append(f"${amount:.2f}")
@@ -637,7 +653,6 @@ class DriverPayCreateView(APIView):
             pickup_stop = None
             delivery_stop = None
             
-            # Access stops from the load object
             for stop in load.stop.all():
                 if stop.stop_name == 'PICKUP':
                     pickup_stop = stop
@@ -728,7 +743,7 @@ class DriverPayCreateView(APIView):
                 "Date": expense.expense_date.strftime('%Y-%m-%d') if expense.expense_date else 'N/A'
             })
 
-        # FIXED: Calculate final total_pay correctly - include all load payments
+        # FIXED: Calculate final total_pay correctly
         print(f"DEBUG: total_load_pays = {total_load_pays}")
         print(f"DEBUG: total_other_pays = {total_other_pays}")
         print(f"DEBUG: total_chargebag_amount = {total_chargebag_amount}")
@@ -758,8 +773,6 @@ class DriverPayCreateView(APIView):
 
         driver_pay.loads = load_details
         driver_pay.amount = total_pay
-        if load_driver_pay.exists():
-            driver_pay.load_driver_pay.set(load_driver_pay)
         driver_pay.save()
 
         # Driver ma'lumotlari
@@ -773,13 +786,13 @@ class DriverPayCreateView(APIView):
             "search_from": driver_pay.pay_from.strftime('%Y-%m-%d') if driver_pay.pay_from else None,
             "search_to": driver_pay.pay_to.strftime('%Y-%m-%d') if driver_pay.pay_to else None,
             "company_name": driver.user.company_name if driver.user else None,
-            "invoice_number": driver_pay.invoice_number,  # NEW: Add invoice_number to response
-            "weekly_number": driver_pay.weekly_number,    # NEW: Add weekly_number to response
+            "invoice_number": driver_pay.invoice_number,
+            "weekly_number": driver_pay.weekly_number,
         }
 
-        # UPDATED: Get company information from Company model instead of driver.user
+        # UPDATED: Get company information from Company model
         try:
-            company = Company.objects.first()  # Get first company (no filter needed)
+            company = Company.objects.first()
             company_info = {
                 "company_name": company.company_name if company else None,
                 "phone": company.phone if company else None,
@@ -803,7 +816,7 @@ class DriverPayCreateView(APIView):
         # Yakuniy javob
         response_data = {
             "driver": driver_info,
-            "company_info": company_info,  # UPDATED: Changed from user_admin to company_info
+            "company_info": company_info,
             "loads": load_details,
             "total_load_pays": {
                 "Formula": " + ".join(total_loads_formula) if total_loads_formula else "N/A",
@@ -835,14 +848,27 @@ class DriverPayCreateView(APIView):
 
         # Company Driver uchun qo'shimcha hisob-kitob
         if driver.driver_type == 'COMPANY_DRIVER':
+            # 2. Company Driver uchun load_company_driver_pay_ids dan qo'shimcha loadlarni qo'shish
+            company_driver_loads = filtered_loads  # Asosiy filterlangan loadlar
+            
+            if load_company_driver_pay_ids:
+                additional_company_loads = Load.objects.filter(
+                    id__in=load_company_driver_pay_ids,
+                    driver=driver,
+                    invoice_status='Paid'
+                ).annotate(
+                    calculated_pickup_date=Min('stop__appointmentdate', filter=Q(stop__stop_name='PICKUP')),
+                    calculated_delivery_date=Max('stop__appointmentdate', filter=Q(stop__stop_name='DELIVERY'))
+                )
+                
+                # Company Driver uchun loadlarni birlashtirish
+                company_driver_loads = company_driver_loads.union(additional_company_loads).distinct()
+            
             # Company Driver uchun miles va pay hisoblash
-            load_company_driver_pay = Load.objects.filter(id__in=load_company_driver_pay_ids) if load_company_driver_pay_ids else Load.objects.none()
             cd_loads_data = []
             total_miles = 0
-            company_driver_filtered_loads = filtered_loads
-            if load_company_driver_pay.exists():
-                company_driver_filtered_loads = (company_driver_filtered_loads | load_company_driver_pay).distinct()
-            for load in filtered_loads:
+            
+            for load in company_driver_loads:
                 # Get loaded miles from load.mile field
                 loaded_miles = load.mile if load.mile else 0
                 total_miles += loaded_miles
@@ -874,8 +900,6 @@ class DriverPayCreateView(APIView):
             driver_pay.total_miles = total_miles
             driver_pay.miles_rate = miles_rate
             driver_pay.company_driver_pay = company_driver_pay
-            if load_company_driver_pay.exists():
-                driver_pay.load_company_driver_pay.set(load_company_driver_pay)
             driver_pay.company_driver_data = {
                 'loads': cd_loads_data,
                 'total_miles': total_miles,
