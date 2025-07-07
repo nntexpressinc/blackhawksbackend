@@ -106,22 +106,23 @@ from django.utils.html import format_html
 from django.urls import reverse
 from django.utils.safestring import mark_safe
 from apps.load.models.csv_import import GoogleSheetsImport
+
 @admin.register(GoogleSheetsImport)
 class GoogleSheetsImportAdmin(admin.ModelAdmin):
     list_display = [
-        'imported_at', 'csv_file', 'start_row', 'end_row', 
+        'imported_at', 'excel_file', 'sheet_name', 'start_row', 'end_row', 
         'total_records', 'success_records', 'failed_records', 
         'is_processed', 'status_display'
     ]
-    list_filter = ['is_processed', 'imported_at']
+    list_filter = ['is_processed', 'imported_at', 'sheet_name']
     readonly_fields = [
         'imported_at', 'total_records', 'success_records', 
         'failed_records', 'is_processed', 'error_log_display'
     ]
     
     fieldsets = (
-        ('CSV Fayl', {
-            'fields': ('csv_file', 'start_row', 'end_row')
+        ('Excel Fayl', {
+            'fields': ('excel_file', 'sheet_name', 'start_row', 'end_row')
         }),
         ('Natijalar', {
             'fields': ('is_processed', 'total_records', 'success_records', 
@@ -158,7 +159,7 @@ class GoogleSheetsImportAdmin(admin.ModelAdmin):
         count = 0
         for import_obj in queryset:
             try:
-                import_obj.process_csv()
+                import_obj.process_excel()
                 count += 1
             except Exception as e:
                 self.message_user(request, f"Xatolik {import_obj.id}: {str(e)}", level='ERROR')

@@ -1,3 +1,4 @@
+# models.py - GoogleSheetsImport modeli qo'shish
 from django.db import models
 from django.core.exceptions import ValidationError
 import pandas as pd
@@ -10,7 +11,8 @@ from apps.load.models.stops import Stops
 logger = logging.getLogger(__name__)
 
 class GoogleSheetsImport(models.Model):
-    csv_file = models.FileField(upload_to='imports/', help_text="Google Sheets dan yuklab olingan CSV fayl")
+    excel_file = models.FileField(upload_to='imports/', help_text="Google Sheets dan yuklab olingan Excel fayl (.xlsx, .xls)")
+    sheet_name = models.CharField(max_length=100, default='Sheet1', help_text="Excel varaqining nomi")
     start_row = models.IntegerField(default=2, help_text="Boshlanish qatori (2 - header dan keyin)")
     end_row = models.IntegerField(blank=True, null=True, help_text="Tugash qatori (bo'sh bo'lsa oxirigacha)")
     imported_at = models.DateTimeField(auto_now_add=True)
@@ -52,14 +54,18 @@ class GoogleSheetsImport(models.Model):
         if self.end_row and self.end_row < self.start_row:
             raise ValidationError("Tugash qatori boshlanish qatoridan kichik bo'lishi mumkin emas")
     
-    def process_csv(self):
-        """CSV faylni qayta ishlab Load va Stops modellarini yaratish"""
-        if not self.csv_file:
-            raise ValidationError("CSV fayl yuklanmagan")
+    def process_excel(self):
+        """Excel faylni qayta ishlab Load va Stops modellarini yaratish"""
+        if not self.excel_file:
+            raise ValidationError("Excel fayl yuklanmagan")
         
         try:
-            # CSV faylni o'qish
-            df = pd.read_csv(self.csv_file.path, encoding='utf-8')
+            # Excel faylni o'qish
+            df = pd.read_excel(
+                self.excel_file.path, 
+                sheet_name=self.sheet_name,
+                engine='openpyxl'  # .xlsx uchun
+            )
             
             # Qatorlarni cheklash
             start_idx = self.start_row - 1  # pandas 0-indexli
@@ -122,7 +128,7 @@ class GoogleSheetsImport(models.Model):
             self.error_log = f"Umumiy xatolik: {str(e)}"
             self.is_processed = True
             self.save()
-            logger.error(f"CSV import xatoligi: {str(e)}")
+            logger.error(f"Excel import xatoligi: {str(e)}")
             return False
     
     def _extract_load_data(self, row):
