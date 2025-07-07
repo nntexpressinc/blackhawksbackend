@@ -6,7 +6,7 @@ from apps.load.models import (
     Load, LoadTags, Driver, DriverTags, Trailer, 
     TrailerTags, TruckTags, Truck, Dispatcher,
     DispatcherTags, EmployeeTags, CustomerBroker, 
-    Stops, Employee, OtherPay, Commodities, CSVImport)
+    Stops, Employee, OtherPay, Commodities)
 
 # Register models
 admin.site.register(DriverExpense)
