@@ -74,7 +74,7 @@ class TeamDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = TeamSerializer
 
 class UnitListView(APIView):
-    # permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated]
     def get(self, request):
         units = Unit.objects.all()
         serializer = UnitSerializer(units, many=True)
@@ -88,7 +88,7 @@ class UnitListView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
 class UnitDetailView(generics.RetrieveUpdateDestroyAPIView):
-    # permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated]
     queryset = Unit.objects.all()
     serializer_class = UnitSerializer
 
@@ -479,8 +479,7 @@ class LoadTagsDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 
 from datetime import datetime
-
-
+from apps.auth.models import Company
 
 
 class DriverPayCreateView(APIView):
