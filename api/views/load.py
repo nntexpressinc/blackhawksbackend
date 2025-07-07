@@ -551,8 +551,8 @@ class DriverPayCreateView(APIView):
         ).distinct()
 
         # 1. load_driver_pay_ids dan qo'shimcha loadlarni qo'shish
-        additional_driver_loads = Load.objects.none()
         if load_driver_pay_ids:
+            # Qo'shimcha loadlarni alohida olish
             additional_driver_loads = Load.objects.filter(
                 id__in=load_driver_pay_ids,
                 driver=driver,
@@ -562,8 +562,20 @@ class DriverPayCreateView(APIView):
                 calculated_delivery_date=Max('stop__appointmentdate', filter=Q(stop__stop_name='DELIVERY'))
             )
             
-            # Asosiy filterlangan loadlar bilan birlashtirish
-            filtered_loads = filtered_loads.union(additional_driver_loads).distinct()
+            # Barcha load ID'larni birlashtirish
+            all_load_ids = set(filtered_loads.values_list('id', flat=True))
+            additional_load_ids = set(additional_driver_loads.values_list('id', flat=True))
+            combined_load_ids = all_load_ids.union(additional_load_ids)
+            
+            # Birlashtirilgan ID'lar bilan yangi queryset yaratish
+            filtered_loads = Load.objects.filter(
+                id__in=combined_load_ids,
+                driver=driver,
+                invoice_status='Paid'
+            ).annotate(
+                calculated_pickup_date=Min('stop__appointmentdate', filter=Q(stop__stop_name='PICKUP')),
+                calculated_delivery_date=Max('stop__appointmentdate', filter=Q(stop__stop_name='DELIVERY'))
+            ).distinct()
 
         # ManyToMany fieldlarni saqlash
         if load_driver_pay_ids:
@@ -852,6 +864,7 @@ class DriverPayCreateView(APIView):
             company_driver_loads = filtered_loads  # Asosiy filterlangan loadlar
             
             if load_company_driver_pay_ids:
+                # Company Driver uchun qo'shimcha loadlarni alohida olish
                 additional_company_loads = Load.objects.filter(
                     id__in=load_company_driver_pay_ids,
                     driver=driver,
@@ -861,8 +874,20 @@ class DriverPayCreateView(APIView):
                     calculated_delivery_date=Max('stop__appointmentdate', filter=Q(stop__stop_name='DELIVERY'))
                 )
                 
-                # Company Driver uchun loadlarni birlashtirish
-                company_driver_loads = company_driver_loads.union(additional_company_loads).distinct()
+                # Company Driver uchun barcha load ID'larni birlashtirish
+                company_load_ids = set(filtered_loads.values_list('id', flat=True))
+                additional_company_load_ids = set(additional_company_loads.values_list('id', flat=True))
+                combined_company_load_ids = company_load_ids.union(additional_company_load_ids)
+                
+                # Company Driver uchun yangi queryset yaratish
+                company_driver_loads = Load.objects.filter(
+                    id__in=combined_company_load_ids,
+                    driver=driver,
+                    invoice_status='Paid'
+                ).annotate(
+                    calculated_pickup_date=Min('stop__appointmentdate', filter=Q(stop__stop_name='PICKUP')),
+                    calculated_delivery_date=Max('stop__appointmentdate', filter=Q(stop__stop_name='DELIVERY'))
+                ).distinct()
             
             # Company Driver uchun miles va pay hisoblash
             cd_loads_data = []
