@@ -101,15 +101,67 @@ class AmazonRelayProcessedRecordAdmin(admin.ModelAdmin):
     get_load_pay.admin_order_field = 'matched_load__load_pay'
 
 # CSV Import Admin
-@admin.register(CSVImport)
-class CSVImportAdmin(admin.ModelAdmin):
-    list_display = ['id', 'csv_file', 'start_row', 'end_row', 'processed', 'success_count', 'error_count', 'created_at']
-    list_filter = ['processed', 'created_at']
-    search_fields = ['csv_file']
-    readonly_fields = ['processed', 'success_count', 'error_count', 'error_log', 'created_at']
-    fields = ['csv_file', 'start_row', 'end_row', 'processed', 'success_count', 'error_count', 'error_log', 'created_at']
+from django.contrib import admin
+from django.utils.html import format_html
+from django.urls import reverse
+from django.utils.safestring import mark_safe
+from apps.load.models.csv_import import GoogleSheetsImport
+@admin.register(GoogleSheetsImport)
+class GoogleSheetsImportAdmin(admin.ModelAdmin):
+    list_display = [
+        'imported_at', 'csv_file', 'start_row', 'end_row', 
+        'total_records', 'success_records', 'failed_records', 
+        'is_processed', 'status_display'
+    ]
+    list_filter = ['is_processed', 'imported_at']
+    readonly_fields = [
+        'imported_at', 'total_records', 'success_records', 
+        'failed_records', 'is_processed', 'error_log_display'
+    ]
     
-    def get_readonly_fields(self, request, obj=None):
-        if obj and obj.processed:  # Agar qayta ishlangan bo'lsa
-            return self.readonly_fields + ['csv_file', 'start_row', 'end_row']
-        return self.readonly_fields
+    fieldsets = (
+        ('CSV Fayl', {
+            'fields': ('csv_file', 'start_row', 'end_row')
+        }),
+        ('Natijalar', {
+            'fields': ('is_processed', 'total_records', 'success_records', 
+                      'failed_records', 'imported_at'),
+            'classes': ('collapse',)
+        }),
+        ('Xatolar', {
+            'fields': ('error_log_display',),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def status_display(self, obj):
+        if obj.is_processed:
+            if obj.failed_records == 0:
+                return format_html('<span style="color: green;">✓ Muvaffaqiyatli</span>')
+            else:
+                return format_html('<span style="color: orange;">⚠ Qisman muvaffaqiyatli</span>')
+        else:
+            return format_html('<span style="color: blue;">⏳ Kutilmoqda</span>')
+    status_display.short_description = 'Status'
+    
+    def error_log_display(self, obj):
+        if obj.error_log:
+            return format_html('<pre style="white-space: pre-wrap; max-height: 300px; overflow-y: auto;">{}</pre>', 
+                             obj.error_log)
+        return "Xatolar yo'q"
+    error_log_display.short_description = 'Xatolar'
+    
+    actions = ['reprocess_imports']
+    
+    def reprocess_imports(self, request, queryset):
+        """Tanlangan importlarni qayta ishga tushirish"""
+        count = 0
+        for import_obj in queryset:
+            try:
+                import_obj.process_csv()
+                count += 1
+            except Exception as e:
+                self.message_user(request, f"Xatolik {import_obj.id}: {str(e)}", level='ERROR')
+        
+        self.message_user(request, f"{count} ta import qayta ishga tushirildi")
+    reprocess_imports.short_description = "Tanlangan importlarni qayta ishga tushirish"
