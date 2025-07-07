@@ -169,6 +169,8 @@ class DriverPay(models.Model):
     loads = models.JSONField(blank=True, null=True, default=list)  # Loads JSON sifatida saqlanadi
     invoice_number = models.CharField(max_length=100, blank=True, null=True)
     weekly_number = models.CharField(max_length=100, blank=True, null=True)
+    total_miles = models.FloatField(blank=True, null=True)  # Yangi field
+    miles_rate = models.FloatField(blank=True, null=True)  # Yangi field
 
 
     def __str__(self):
