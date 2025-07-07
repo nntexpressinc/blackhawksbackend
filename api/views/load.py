@@ -531,7 +531,8 @@ class DriverPayCreateView(APIView):
         # FIXED: Changed annotation names to avoid conflicts with existing model fields
         loads_with_dates = Load.objects.filter(
             driver=driver,
-            stop__appointmentdate__isnull=False
+            stop__appointmentdate__isnull=False,
+            invoice_status='Paid'  # Only include loads with invoice_status Paid
         ).annotate(
             calculated_pickup_date=Min('stop__appointmentdate', filter=Q(stop__stop_name='PICKUP')),
             calculated_delivery_date=Max('stop__appointmentdate', filter=Q(stop__stop_name='DELIVERY'))
