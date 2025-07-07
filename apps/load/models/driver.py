@@ -4,7 +4,6 @@ from .truck import Truck
 from .trailer import Trailer
 from .dispatcher import Dispatcher
 from django.conf import settings
-from apps.load.models.load import Load
 class DriverTags(models.Model):
     tag = models.CharField(max_length=50, blank=True, null=True)
 
