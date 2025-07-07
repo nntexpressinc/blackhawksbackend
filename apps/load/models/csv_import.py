@@ -79,23 +79,24 @@ class GoogleSheetsImport(models.Model):
                         # Load yaratish
                         load_data = self._extract_load_data(row)
                         load = Load.objects.create(**load_data)
-                        
+
                         # Stops yaratish
                         stops_data = self._extract_stops_data(row, load)
                         stops_instances = []
-                        
+
                         for stop_data in stops_data:
-                            if stop_data:  # Bo'sh bo'lmagan stops
+                            # Faqat dict va bo'sh bo'lmagan dict uchun create chaqiramiz
+                            if isinstance(stop_data, dict) and stop_data:
                                 stop = Stops.objects.create(**stop_data)
                                 stops_instances.append(stop)
-                        
+
                         # Load ga stops larni bog'lash
                         if stops_instances:
                             load.stop.set(stops_instances)
-                        
+
                         success_count += 1
                         logger.info(f"Load {load.load_id} muvaffaqiyatli yaratildi")
-                        
+
                     except Exception as e:
                         error_msg = f"Qator {index + 1}: {str(e)}"
                         error_messages.append(error_msg)
