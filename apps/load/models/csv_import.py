@@ -1,5 +1,3 @@
-
-# models.py - GoogleSheetsImport modeli qo'shish
 from django.db import models
 from django.core.exceptions import ValidationError
 import pandas as pd
@@ -78,6 +76,14 @@ class GoogleSheetsImport(models.Model):
                     try:
                         # Load yaratish
                         load_data = self._extract_load_data(row)
+                        
+                        # Load data mavjudligini tekshirish
+                        if not load_data:
+                            error_msg = f"Qator {index + 1}: Load ma'lumotlari bo'sh"
+                            error_messages.append(error_msg)
+                            logger.warning(error_msg)
+                            continue
+                        
                         load = Load.objects.create(**load_data)
 
                         # Stops yaratish
@@ -129,13 +135,18 @@ class GoogleSheetsImport(models.Model):
         
         load_data = {}
         
+        # Majburiy maydonlar tekshiruvi
+        blackhawks_load = row.get('Blackhawks load number')
+        if not pd.notna(blackhawks_load) or not str(blackhawks_load).strip():
+            logger.warning(f"Blackhawks load number bo'sh yoki noto'g'ri: {blackhawks_load}")
+            return None
+        
         # Blackhawks load number -> load_id
-        if pd.notna(row.get('Blackhawks load number')):
-            load_data['load_id'] = str(row['Blackhawks load number'])
+        load_data['load_id'] = str(blackhawks_load).strip()
         
         # Dispatch name -> dispatcher
         dispatch_name = row.get('Dispatch name', '').strip()
-        if dispatch_name in self.DISPATCHER_MAPPING:
+        if dispatch_name and dispatch_name in self.DISPATCHER_MAPPING:
             try:
                 dispatcher_obj = Dispatcher.objects.get(id=self.DISPATCHER_MAPPING[dispatch_name])
                 load_data['dispatcher'] = dispatcher_obj
@@ -144,7 +155,7 @@ class GoogleSheetsImport(models.Model):
         
         # Unit № -> unit_id
         unit_num = str(row.get('Unit №', '')).strip()
-        if unit_num in self.UNIT_MAPPING:
+        if unit_num and unit_num in self.UNIT_MAPPING:
             try:
                 unit_obj = Unit.objects.get(id=self.UNIT_MAPPING[unit_num])
                 load_data['unit_id'] = unit_obj
@@ -153,7 +164,7 @@ class GoogleSheetsImport(models.Model):
         
         # Driver -> driver
         driver_name = row.get('Assiged trailer Driver', '').strip()
-        if driver_name in self.DRIVER_MAPPING:
+        if driver_name and driver_name in self.DRIVER_MAPPING:
             try:
                 driver_obj = Driver.objects.get(id=self.DRIVER_MAPPING[driver_name])
                 load_data['driver'] = driver_obj
@@ -161,20 +172,28 @@ class GoogleSheetsImport(models.Model):
                 logger.warning(f"Driver ID {self.DRIVER_MAPPING[driver_name]} topilmadi")
         
         # Load № -> trip_id
-        if pd.notna(row.get('Load №')):
+        load_num = row.get('Load №')
+        if pd.notna(load_num):
             try:
-                load_data['trip_id'] = int(row['Load №'])
+                load_data['trip_id'] = int(load_num)
             except (ValueError, TypeError):
-                pass
+                logger.warning(f"Load № ni int ga o'tkazib bo'lmadi: {load_num}")
         
         # Rate -> load_pay va total_pay
-        if pd.notna(row.get('Rate')):
+        rate = row.get('Rate')
+        if pd.notna(rate):
             try:
-                rate_value = float(str(row['Rate']).replace('$', '').replace(',', ''))
+                rate_value = float(str(rate).replace('$', '').replace(',', ''))
                 load_data['load_pay'] = rate_value
                 load_data['total_pay'] = rate_value
             except (ValueError, TypeError):
-                pass
+                logger.warning(f"Rate ni float ga o'tkazib bo'lmadi: {rate}")
+        
+        # Agar load_data bo'sh bo'lsa, kamida load_id bilan qaytarish
+        if not load_data:
+            load_data = {'load_id': str(blackhawks_load).strip()}
+        
+        return load_data
     
     def _extract_stops_data(self, row, load):
         """Qatordan Stops uchun ma'lumotlarni ajratib olish"""
@@ -189,7 +208,7 @@ class GoogleSheetsImport(models.Model):
             company_col='Pick up 🏭 Facility name',
             ref_col='Pick up 🏭 Number'
         )
-        if isinstance(pickup_data, dict) and pickup_data:
+        if pickup_data:
             stops_data.append(pickup_data)
 
         # DELIVERY Stop (Last Stop)
@@ -201,7 +220,7 @@ class GoogleSheetsImport(models.Model):
             company_col='Delivery name for Last Stop 🏭',
             ref_col='Pick up / Delivery № for Last Stop'
         )
-        if isinstance(delivery_data, dict) and delivery_data:
+        if delivery_data:
             stops_data.append(delivery_data)
 
         # Stop-2
@@ -213,7 +232,7 @@ class GoogleSheetsImport(models.Model):
             company_col=' Delivery name for Stop🏭2',
             ref_col='Delivery number for Stop2'
         )
-        if isinstance(stop2_data, dict) and stop2_data:
+        if stop2_data:
             stops_data.append(stop2_data)
 
         # Stop-3
@@ -225,30 +244,33 @@ class GoogleSheetsImport(models.Model):
             company_col='Delivery name for Stop3',
             ref_col='Delivery Number for Stop3'
         )
-        if isinstance(stop3_data, dict) and stop3_data:
+        if stop3_data:
             stops_data.append(stop3_data)
 
         return stops_data
     
     def _create_stop_data(self, row, load, stop_name, address_col, date_col, time_col, company_col, ref_col):
         """Bitta stop uchun ma'lumotlarni yaratish"""
-        # Address majburiy
-        if not pd.notna(row.get(address_col)):
+        # Address majburiy - mavjud emas bo'lsa None qaytarish
+        address = row.get(address_col)
+        if not pd.notna(address) or not str(address).strip():
             return None
         
         stop_data = {
             'load': load,
             'stop_name': stop_name,
-            'address1': str(row[address_col]),
+            'address1': str(address).strip(),
         }
         
         # Company name
-        if pd.notna(row.get(company_col)):
-            stop_data['company_name'] = str(row[company_col])
+        company = row.get(company_col)
+        if pd.notna(company) and str(company).strip():
+            stop_data['company_name'] = str(company).strip()
         
         # Reference ID
-        if pd.notna(row.get(ref_col)):
-            stop_data['reference_id'] = str(row[ref_col])
+        ref_id = row.get(ref_col)
+        if pd.notna(ref_id) and str(ref_id).strip():
+            stop_data['reference_id'] = str(ref_id).strip()
         
         # Date va Time ni birlashtirish
         appointment_datetime = self._combine_date_time(
@@ -265,13 +287,19 @@ class GoogleSheetsImport(models.Model):
             if pd.notna(date_val) and pd.notna(time_val):
                 # Date ni parse qilish
                 if isinstance(date_val, str):
-                    date_obj = pd.to_datetime(date_val).date()
+                    date_obj = pd.to_datetime(date_val, errors='coerce')
+                    if pd.isna(date_obj):
+                        return None
+                    date_obj = date_obj.date()
                 else:
                     date_obj = date_val
                 
                 # Time ni parse qilish
                 if isinstance(time_val, str):
-                    time_obj = pd.to_datetime(time_val).time()
+                    time_obj = pd.to_datetime(time_val, errors='coerce')
+                    if pd.isna(time_obj):
+                        return None
+                    time_obj = time_obj.time()
                 else:
                     time_obj = time_val
                 
@@ -280,7 +308,10 @@ class GoogleSheetsImport(models.Model):
             
             elif pd.notna(date_val):
                 # Faqat sana
-                return pd.to_datetime(date_val)
+                date_obj = pd.to_datetime(date_val, errors='coerce')
+                if pd.isna(date_obj):
+                    return None
+                return date_obj
             
             return None
             
