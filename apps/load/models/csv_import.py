@@ -189,9 +189,9 @@ class GoogleSheetsImport(models.Model):
             company_col='Pick up 🏭 Facility name',
             ref_col='Pick up 🏭 Number'
         )
-        if pickup_data:
+        if isinstance(pickup_data, dict) and pickup_data:
             stops_data.append(pickup_data)
-        
+
         # DELIVERY Stop (Last Stop)
         delivery_data = self._create_stop_data(
             row, load, 'DELIVERY',
@@ -201,9 +201,9 @@ class GoogleSheetsImport(models.Model):
             company_col='Delivery name for Last Stop 🏭',
             ref_col='Pick up / Delivery № for Last Stop'
         )
-        if delivery_data:
+        if isinstance(delivery_data, dict) and delivery_data:
             stops_data.append(delivery_data)
-        
+
         # Stop-2
         stop2_data = self._create_stop_data(
             row, load, 'Stop-2',
@@ -213,9 +213,9 @@ class GoogleSheetsImport(models.Model):
             company_col=' Delivery name for Stop🏭2',
             ref_col='Delivery number for Stop2'
         )
-        if stop2_data:
+        if isinstance(stop2_data, dict) and stop2_data:
             stops_data.append(stop2_data)
-        
+
         # Stop-3
         stop3_data = self._create_stop_data(
             row, load, 'Stop-3',
@@ -225,9 +225,9 @@ class GoogleSheetsImport(models.Model):
             company_col='Delivery name for Stop3',
             ref_col='Delivery Number for Stop3'
         )
-        if stop3_data:
+        if isinstance(stop3_data, dict) and stop3_data:
             stops_data.append(stop3_data)
-        
+
         return stops_data
     
     def _create_stop_data(self, row, load, stop_name, address_col, date_col, time_col, company_col, ref_col):
