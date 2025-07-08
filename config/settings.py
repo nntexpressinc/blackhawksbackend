@@ -178,6 +178,9 @@ CORS_ALLOWED_ORIGINS = [
     "http://tms-beta-ten.vercel.app",
     "https://ezpzfleet.com",
     "https://api1.biznes-armiya.uz",
+    "https://blackhawks.vercel.app",
+    "https://blackhawks.biznes-armiya.uz",
+
 ]
 
 CSRF_TRUSTED_ORIGINS = [
@@ -187,6 +190,8 @@ CSRF_TRUSTED_ORIGINS = [
     "https://blackhawks.biznes-armiya.uz",  
     "http://tms-beta-ten.vercel.app", 
     "https://ezpzfleet.com",   
+    "https://blackhawks.vercel.app",
+    
 ]
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
