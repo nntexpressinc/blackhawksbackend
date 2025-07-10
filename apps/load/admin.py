@@ -1,4 +1,5 @@
 from django.contrib import admin
+from apps.load.models.ifta import FuelTaxRate
 from apps.load.models.driver import Pay, DriverPay, DriverExpense
 from apps.load.models.truck import Unit
 from apps.load.models.team import Team
