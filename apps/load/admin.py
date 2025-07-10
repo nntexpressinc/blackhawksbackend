@@ -10,6 +10,7 @@ from apps.load.models import (
     Stops, Employee, OtherPay, Commodities)
 
 # Register models
+admin.site.register(FuelTaxRate)
 admin.site.register(DriverExpense)
 admin.site.register(Pay)
 admin.site.register(DriverPay)
