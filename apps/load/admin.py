@@ -39,7 +39,6 @@ from django.contrib import messages
 from apps.load.models.amazon import AmazonRelayPayment, AmazonRelayProcessedRecord
 from apps.load.models.ifta import Ifta, FuelTaxRate
 admin.site.register(Ifta)
-@admin.register(FuelTaxRate)
 class FuelTaxRateAdmin(admin.ModelAdmin):
     list_display = ['quarter', 'state', 'rate', 'mpg']
     list_filter = ['quarter', 'state']
