@@ -44,11 +44,6 @@ class FuelTaxRateAdmin(admin.ModelAdmin):
     search_fields = ('quarter', 'state')
     ordering = ('quarter', 'state')
 
-@admin.register(Driver)
-class DriverAdmin(admin.ModelAdmin):
-    list_display = ('name', 'license_number')
-    search_fields = ('name', 'license_number')
-
 @admin.register(Ifta)
 class IftaAdmin(admin.ModelAdmin):
     list_display = ('driver', 'quarter', 'state', 'weekly_number', 'total_miles', 'tax', 'created_at')
