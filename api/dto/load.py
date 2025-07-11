@@ -175,7 +175,7 @@ class CommoditiesSerializer(serializers.ModelSerializer):
         model = Commodities
         fields = "__all__"
 
-
+from apps.load.models.ifta import FuelTaxRate, Ifta 
         
 class FuelTaxRateSerializer(serializers.ModelSerializer):
     class Meta:
