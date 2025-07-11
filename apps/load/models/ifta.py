@@ -8,7 +8,7 @@ class FuelTaxRate(models.Model):
         ('Quarter 3', 'Quarter 3'),
         ('Quarter 4', 'Quarter 4'),
     ], default='Quarter 1')
-    state = models.CharField(max_length=2, choices=[
+    state = models.CharField(max_length=15, choices=[
         ('AL', 'Alabama'),
         ('AK', 'Alaska'),
         ('AZ', 'Arizona'),
