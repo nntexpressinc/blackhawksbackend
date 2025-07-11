@@ -10,7 +10,6 @@ from apps.load.models import (
     Stops, Employee, OtherPay, Commodities)
 
 # Register models
-admin.site.register(FuelTaxRate)
 admin.site.register(DriverExpense)
 admin.site.register(Pay)
 admin.site.register(DriverPay)
@@ -38,17 +37,25 @@ from django.shortcuts import render
 from django.contrib import messages
 from apps.load.models.amazon import AmazonRelayPayment, AmazonRelayProcessedRecord
 from apps.load.models.ifta import Ifta, FuelTaxRate
-admin.site.register(Ifta)
+@admin.register(FuelTaxRate)
 class FuelTaxRateAdmin(admin.ModelAdmin):
-    list_display = ['quarter', 'state', 'rate', 'mpg']
-    list_filter = ['quarter', 'state']
-    search_fields = ['quarter', 'state']
-    fields = ['quarter', 'state', 'rate', 'mpg']
-    
-    def get_readonly_fields(self, request, obj=None):
-        if obj:  # editing an existing object
-            return self.readonly_fields + ['quarter', 'state']
-        return self.readonly_fields
+    list_display = ('quarter', 'state', 'rate', 'mpg')
+    list_filter = ('quarter', 'state')
+    search_fields = ('quarter', 'state')
+    ordering = ('quarter', 'state')
+
+@admin.register(Driver)
+class DriverAdmin(admin.ModelAdmin):
+    list_display = ('name', 'license_number')
+    search_fields = ('name', 'license_number')
+
+@admin.register(Ifta)
+class IftaAdmin(admin.ModelAdmin):
+    list_display = ('driver', 'quarter', 'state', 'weekly_number', 'total_miles', 'tax', 'created_at')
+    list_filter = ('quarter', 'state', 'weekly_number', 'created_at')
+    search_fields = ('driver__name', 'quarter', 'state', 'invoice_number')
+    readonly_fields = ('taxible_gallon', 'net_taxible_gallon', 'tax', 'created_at', 'updated_at')
+    ordering = ('-created_at',)
     
 
 
