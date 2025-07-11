@@ -1,5 +1,6 @@
 from django.db import models
 
+from apps.load.models.driver import Driver
 class FuelTaxRate(models.Model):
     quarter = models.CharField(max_length=10, choices=[
         ('Quarter 1', 'Quarter 1'),
@@ -67,3 +68,32 @@ class FuelTaxRate(models.Model):
 
     def __str__(self):
         return f"{self.quarter} - {self.state} - {self.rate}"
+    
+
+
+class Ifta(models.Model):
+    fuel_tax_rate = models.ForeignKey(FuelTaxRate, on_delete=models.CASCADE)
+    quarter = models.CharField(max_length=10, choices=[
+        ('Quarter 1', 'Quarter 1'),
+        ('Quarter 2', 'Quarter 2'),
+        ('Quarter 3', 'Quarter 3'),
+        ('Quarter 4', 'Quarter 4'),
+    ])
+    state = models.CharField(max_length=2)
+    driver = models.ForeignKey(Driver, on_delete=models.CASCADE)
+    total_miles = models.DecimalField(max_digits=10, decimal_places=2)
+    taxible_gallon = models.DecimalField(max_digits=10, decimal_places=3, null=True, blank=True)
+    tax_paid_gallon = models.DecimalField(max_digits=10, decimal_places=3, null=True, blank=True)
+    net_taxible_gallon = models.DecimalField(max_digits=10, decimal_places=3, null=True, blank=True)
+    tax = models.DecimalField(max_digits=10, decimal_places=3, null=True, blank=True)
+    invoice_number = models.CharField(max_length=100, null=True, blank=True)
+    weekly_number = models.IntegerField()
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = ('quarter', 'state', 'driver', 'weekly_number')
+    
+    def __str__(self):
+        return f"{self.driver.name} - {self.quarter} - {self.state} - Week {self.weekly_number}"
