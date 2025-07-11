@@ -37,6 +37,20 @@ from django.http import JsonResponse
 from django.shortcuts import render
 from django.contrib import messages
 from apps.load.models.amazon import AmazonRelayPayment, AmazonRelayProcessedRecord
+from apps.load.models.ifta import Ifta, FuelTaxRate
+admin.site.register(Ifta)
+@admin.register(FuelTaxRate)
+class FuelTaxRateAdmin(admin.ModelAdmin):
+    list_display = ['quarter', 'state', 'rate', 'mpg']
+    list_filter = ['quarter', 'state']
+    search_fields = ['quarter', 'state']
+    fields = ['quarter', 'state', 'rate', 'mpg']
+    
+    def get_readonly_fields(self, request, obj=None):
+        if obj:  # editing an existing object
+            return self.readonly_fields + ['quarter', 'state']
+        return self.readonly_fields
+    
 
 
 @admin.register(AmazonRelayPayment)
@@ -168,3 +182,4 @@ class GoogleSheetsImportAdmin(admin.ModelAdmin):
         
         self.message_user(request, f"{count} ta import qayta ishga tushirildi")
     reprocess_imports.short_description = "Tanlangan importlarni qayta ishga tushirish"
+
