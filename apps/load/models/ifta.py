@@ -96,4 +96,4 @@ class Ifta(models.Model):
         unique_together = ('quarter', 'state', 'driver', 'weekly_number')
     
     def __str__(self):
-        return f"{self.driver.name} - {self.quarter} - {self.state} - Week {self.weekly_number}"
+        return f"{self.driver.user.email} - {self.quarter} - {self.state} - Week {self.weekly_number}"
