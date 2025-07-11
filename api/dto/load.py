@@ -186,10 +186,31 @@ class FuelTaxRateSerializer(serializers.ModelSerializer):
 class BulkFuelTaxRateSerializer(serializers.Serializer):
     quarter = serializers.CharField()
     rates = serializers.ListField(
-        child=serializers.DictField(
-            child=serializers.DecimalField(max_digits=5, decimal_places=3)
-        )
+        child=serializers.DictField()
     )
+    
+    def validate_rates(self, value):
+        """Validate that each rate entry has the correct structure"""
+        for rate_data in value:
+            for state, rate_info in rate_data.items():
+                if not isinstance(rate_info, dict):
+                    raise serializers.ValidationError(f"Rate info for {state} must be a dictionary")
+                
+                if 'rate' not in rate_info:
+                    raise serializers.ValidationError(f"Rate is required for {state}")
+                
+                try:
+                    float(rate_info['rate'])
+                except (ValueError, TypeError):
+                    raise serializers.ValidationError(f"Rate for {state} must be a valid number")
+                
+                if 'mpg' in rate_info and rate_info['mpg'] is not None:
+                    try:
+                        float(rate_info['mpg'])
+                    except (ValueError, TypeError):
+                        raise serializers.ValidationError(f"MPG for {state} must be a valid number")
+        
+        return value
     
     def create(self, validated_data):
         quarter = validated_data['quarter']
