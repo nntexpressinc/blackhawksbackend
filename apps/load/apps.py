@@ -10,3 +10,4 @@ class LoadConfig(AppConfig):
         import apps.load.signals
         import apps.load.models.amazon
         import apps.load.csv_signals
+        import apps.load.ifta_signals
