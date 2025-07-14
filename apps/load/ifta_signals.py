@@ -19,7 +19,7 @@ def calculate_ifta_values(sender, instance, **kwargs):
         instance.fuel_tax_rate = fuel_tax_rate
         
         # Calculate taxible_gallon
-        if fuel_tax_rate.mpg and fuel_tax_rate.mpg > 0:
+        if instance.total_miles and fuel_tax_rate.mpg and fuel_tax_rate.mpg > 0:
             # Convert total_miles to Decimal for consistent calculation
             total_miles_decimal = Decimal(str(instance.total_miles))
             instance.taxible_gallon = total_miles_decimal / fuel_tax_rate.mpg
