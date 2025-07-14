@@ -744,6 +744,10 @@ class DriverPayCreateView(APIView):
                 weekly_number=weekly_number
             )
             
+            # Update invoice_number in IFTA records if provided
+            if invoice_number:
+                ifta_records.update(invoice_number=invoice_number)
+            
             # Calculate total IFTA tax
             for ifta in ifta_records:
                 if ifta.tax:
