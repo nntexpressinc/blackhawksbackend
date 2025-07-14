@@ -733,6 +733,31 @@ class DriverPayCreateView(APIView):
             if load_update_fields:
                 filtered_loads.update(**load_update_fields)
 
+        # NEW: IFTA tax calculation
+        total_ifta_tax = 0.0
+        ifta_details = []
+        
+        if weekly_number:
+            # Filter IFTA records by driver and weekly_number
+            ifta_records = Ifta.objects.filter(
+                driver=driver,
+                weekly_number=weekly_number
+            )
+            
+            # Calculate total IFTA tax
+            for ifta in ifta_records:
+                if ifta.tax:
+                    tax_amount = float(ifta.tax)
+                    total_ifta_tax += tax_amount
+                    ifta_details.append({
+                        "state": ifta.state,
+                        "quarter": ifta.quarter,
+                        "tax_amount": f"${tax_amount:.2f}",
+                        "total_miles": float(ifta.total_miles) if ifta.total_miles else 0,
+                        "taxible_gallon": float(ifta.taxible_gallon) if ifta.taxible_gallon else 0,
+                        "net_taxible_gallon": float(ifta.net_taxible_gallon) if ifta.net_taxible_gallon else 0
+                    })
+
         total_expenses = 0.0
         total_income = 0.0
         expense_details = []
@@ -756,15 +781,16 @@ class DriverPayCreateView(APIView):
                 "Date": expense.expense_date.strftime('%Y-%m-%d') if expense.expense_date else 'N/A'
             })
 
-        # FIXED: Calculate final total_pay correctly
+        # UPDATED: Calculate final total_pay correctly with IFTA tax deduction
         print(f"DEBUG: total_load_pays = {total_load_pays}")
         print(f"DEBUG: total_other_pays = {total_other_pays}")
         print(f"DEBUG: total_chargebag_amount = {total_chargebag_amount}")
         print(f"DEBUG: escrow_weekly = {escrow_weekly}")
         print(f"DEBUG: total_expenses = {total_expenses}")
         print(f"DEBUG: total_income = {total_income}")
+        print(f"DEBUG: total_ifta_tax = {total_ifta_tax}")
         
-        total_pay = total_load_pays + total_other_pays - escrow_weekly - total_expenses + total_income - total_chargebag_amount
+        total_pay = total_load_pays + total_other_pays - escrow_weekly - total_expenses + total_income - total_chargebag_amount - total_ifta_tax
 
         print(f"DEBUG: calculated total_pay = {total_pay}")
         total_pay = max(total_pay, 0)
@@ -783,6 +809,8 @@ class DriverPayCreateView(APIView):
             total_pay_formula.append(f"Income: ${total_income:.2f}")
         if total_expenses > 0:
             total_pay_formula.append(f"Expenses: -${total_expenses:.2f}")
+        if total_ifta_tax > 0:
+            total_pay_formula.append(f"IFTA: -${total_ifta_tax:.2f}")
 
         driver_pay.loads = load_details
         driver_pay.amount = total_pay
@@ -852,6 +880,11 @@ class DriverPayCreateView(APIView):
             "total_income": {
                 "Formula": " + ".join(income_formula) if income_formula else "N/A",
                 "Result": f"${total_income:.2f}"
+            },
+            "ifta_deduction": {
+                "Formula": f"-${total_ifta_tax:.2f}" if total_ifta_tax > 0 else "N/A",
+                "Result": f"${total_ifta_tax:.2f}",
+                "Details": ifta_details
             },
             "total_pay": {
                 "Formula": " + ".join(total_pay_formula) if total_pay_formula else "N/A",
@@ -951,195 +984,3 @@ class DriverPayCreateView(APIView):
             }
 
         return Response(response_data, status=status.HTTP_201_CREATED)
-    
-
-
-from rest_framework import viewsets, status
-from rest_framework.decorators import action
-from rest_framework.response import Response
-from django.db.models import Q
-from collections import defaultdict
-
-
-
-class FuelTaxRateViewSet(viewsets.ModelViewSet):
-    queryset = FuelTaxRate.objects.all()
-    serializer_class = FuelTaxRateSerializer
-    
-    @action(detail=False, methods=['post'])
-    def bulk_create(self, request):
-        """
-        Create multiple fuel tax rates for all states in a single request
-        Expected format:
-        {
-            "quarter": "Quarter 1",
-            "rates": [
-                {
-                    "AL": {"rate": 0.285, "mpg": 7.5},
-                    "AK": {"rate": 0.195, "mpg": 8.0}
-                }
-            ]
-        }
-        """
-        serializer = BulkFuelTaxRateSerializer(data=request.data)
-        if serializer.is_valid():
-            created_rates = serializer.save()
-            return Response(
-                FuelTaxRateSerializer(created_rates, many=True).data,
-                status=status.HTTP_201_CREATED
-            )
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
-    @action(detail=False, methods=['get'])
-    def by_quarter(self, request):
-        """
-        Get all fuel tax rates grouped by quarter
-        """
-        quarter = request.query_params.get('quarter')
-        if quarter:
-            rates = FuelTaxRate.objects.filter(quarter=quarter)
-        else:
-            rates = FuelTaxRate.objects.all()
-        
-        grouped_data = defaultdict(list)
-        for rate in rates:
-            grouped_data[rate.quarter].append(FuelTaxRateSerializer(rate).data)
-        
-        return Response(dict(grouped_data))
-    
-    @action(detail=False, methods=['put'])
-    def bulk_update(self, request):
-        """
-        Update multiple fuel tax rates for a quarter
-        """
-        quarter = request.data.get('quarter')
-        rates_data = request.data.get('rates', [])
-        
-        updated_rates = []
-        for rate_data in rates_data:
-            for state, rate_info in rate_data.items():
-                try:
-                    fuel_tax_rate = FuelTaxRate.objects.get(quarter=quarter, state=state)
-                    fuel_tax_rate.rate = rate_info.get('rate', fuel_tax_rate.rate)
-                    fuel_tax_rate.mpg = rate_info.get('mpg', fuel_tax_rate.mpg)
-                    fuel_tax_rate.save()
-                    updated_rates.append(fuel_tax_rate)
-                except FuelTaxRate.DoesNotExist:
-                    continue
-        
-        return Response(
-            FuelTaxRateSerializer(updated_rates, many=True).data,
-            status=status.HTTP_200_OK
-        )
-
-
-class IftaViewSet(viewsets.ModelViewSet):
-    queryset = Ifta.objects.all()
-    serializer_class = IftaSerializer
-    
-    def get_queryset(self):
-        queryset = Ifta.objects.select_related('fuel_tax_rate', 'driver').all()
-        quarter = self.request.query_params.get('quarter')
-        driver = self.request.query_params.get('driver')
-        weekly_number = self.request.query_params.get('weekly_number')
-        
-        if quarter:
-            queryset = queryset.filter(quarter=quarter)
-        if driver:
-            queryset = queryset.filter(driver=driver)
-        if weekly_number:
-            queryset = queryset.filter(weekly_number=weekly_number)
-        
-        return queryset
-    
-    @action(detail=False, methods=['post'])
-    def bulk_create(self, request):
-        """
-        Create multiple IFTA records for all states in a single request
-        Expected format:
-        {
-            "quarter": "Quarter 1",
-            "weekly_number": 1,
-            "driver": 1,
-            "ifta_records": [
-                {
-                    "state": "AL",
-                    "total_miles": 1000,
-                    "tax_paid_gallon": 50,
-                    "invoice_number": "INV-001"
-                }
-            ]
-        }
-        """
-        serializer = BulkIftaSerializer(data=request.data)
-        if serializer.is_valid():
-            created_records = serializer.save()
-            return Response(
-                IftaSerializer(created_records, many=True).data,
-                status=status.HTTP_201_CREATED
-            )
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
-    @action(detail=False, methods=['get'])
-    def by_quarter_and_driver(self, request):
-        """
-        Get IFTA records grouped by quarter and driver
-        """
-        quarter = request.query_params.get('quarter')
-        driver_id = request.query_params.get('driver')
-        weekly_number = request.query_params.get('weekly_number')
-        
-        filters = Q()
-        if quarter:
-            filters &= Q(quarter=quarter)
-        if driver_id:
-            filters &= Q(driver_id=driver_id)
-        if weekly_number:
-            filters &= Q(weekly_number=weekly_number)
-        
-        records = Ifta.objects.filter(filters).select_related('fuel_tax_rate', 'driver')
-        
-        grouped_data = defaultdict(lambda: defaultdict(list))
-        for record in records:
-            grouped_data[record.quarter][record.driver.name].append(
-                IftaSerializer(record).data
-            )
-        
-        return Response(dict(grouped_data))
-    
-    @action(detail=False, methods=['put'])
-    def bulk_update(self, request):
-        """
-        Update multiple IFTA records
-        """
-        quarter = request.data.get('quarter')
-        driver_id = request.data.get('driver')
-        weekly_number = request.data.get('weekly_number')
-        ifta_records_data = request.data.get('ifta_records', [])
-        
-        updated_records = []
-        for record_data in ifta_records_data:
-            try:
-                ifta_record = Ifta.objects.get(
-                    quarter=quarter,
-                    state=record_data['state'],
-                    driver_id=driver_id,
-                    weekly_number=weekly_number
-                )
-                
-                # Update fields
-                ifta_record.total_miles = record_data.get('total_miles', ifta_record.total_miles)
-                ifta_record.tax_paid_gallon = record_data.get('tax_paid_gallon', ifta_record.tax_paid_gallon)
-                ifta_record.invoice_number = record_data.get('invoice_number', ifta_record.invoice_number)
-                
-                ifta_record.save()  # This will trigger the signal for recalculation
-                updated_records.append(ifta_record)
-                
-            except Ifta.DoesNotExist:
-                continue
-        
-        return Response(
-            IftaSerializer(updated_records, many=True).data,
-            status=status.HTTP_200_OK
-        )
-
