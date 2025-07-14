@@ -119,18 +119,18 @@ urlpatterns = [
     path('chat/<int:pk>/', ChatDetail.as_view()),
 
 
-    path('api/fuel-tax-rates/', FuelTaxRateViewSet.as_view({'get': 'list', 'post': 'create'}), name='fuel-tax-rates-list'),
-    path('api/fuel-tax-rates/<int:pk>/', FuelTaxRateViewSet.as_view({'get': 'retrieve', 'put': 'update', 'patch': 'partial_update', 'delete': 'destroy'}), name='fuel-tax-rates-detail'),
-    path('api/fuel-tax-rates/bulk_create/', FuelTaxRateViewSet.as_view({'post': 'bulk_create'}), name='fuel-tax-rates-bulk-create'),
-    path('api/fuel-tax-rates/by_quarter/', FuelTaxRateViewSet.as_view({'get': 'by_quarter'}), name='fuel-tax-rates-by-quarter'),
-    path('api/fuel-tax-rates/bulk_update/', FuelTaxRateViewSet.as_view({'put': 'bulk_update'}), name='fuel-tax-rates-bulk-update'),
+    path('fuel-tax-rates/', FuelTaxRateViewSet.as_view({'get': 'list', 'post': 'create'}), name='fuel-tax-rates-list'),
+    path('fuel-tax-rates/<int:pk>/', FuelTaxRateViewSet.as_view({'get': 'retrieve', 'put': 'update', 'patch': 'partial_update', 'delete': 'destroy'}), name='fuel-tax-rates-detail'),
+    path('fuel-tax-rates/bulk_create/', FuelTaxRateViewSet.as_view({'post': 'bulk_create'}), name='fuel-tax-rates-bulk-create'),
+    path('fuel-tax-rates/by_quarter/', FuelTaxRateViewSet.as_view({'get': 'by_quarter'}), name='fuel-tax-rates-by-quarter'),
+    path('fuel-tax-rates/bulk_update/', FuelTaxRateViewSet.as_view({'put': 'bulk_update'}), name='fuel-tax-rates-bulk-update'),
     
     # IFTA URLs
-    path('api/ifta/', IftaViewSet.as_view({'get': 'list', 'post': 'create'}), name='ifta-list'),
-    path('api/ifta/<int:pk>/', IftaViewSet.as_view({'get': 'retrieve', 'put': 'update', 'patch': 'partial_update', 'delete': 'destroy'}), name='ifta-detail'),
-    path('api/ifta/bulk_create/', IftaViewSet.as_view({'post': 'bulk_create'}), name='ifta-bulk-create'),
-    path('api/ifta/by_quarter_and_driver/', IftaViewSet.as_view({'get': 'by_quarter_and_driver'}), name='ifta-by-quarter-driver'),
-    path('api/ifta/bulk_update/', IftaViewSet.as_view({'put': 'bulk_update'}), name='ifta-bulk-update'),
+    path('ifta/', IftaViewSet.as_view({'get': 'list', 'post': 'create'}), name='ifta-list'),
+    path('ifta/<int:pk>/', IftaViewSet.as_view({'get': 'retrieve', 'put': 'update', 'patch': 'partial_update', 'delete': 'destroy'}), name='ifta-detail'),
+    path('ifta/bulk_create/', IftaViewSet.as_view({'post': 'bulk_create'}), name='ifta-bulk-create'),
+    path('ifta/by_quarter_and_driver/', IftaViewSet.as_view({'get': 'by_quarter_and_driver'}), name='ifta-by-quarter-driver'),
+    path('ifta/bulk_update/', IftaViewSet.as_view({'put': 'bulk_update'}), name='ifta-bulk-update'),
     
 
 

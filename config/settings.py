@@ -180,7 +180,7 @@ CORS_ALLOWED_ORIGINS = [
     "https://api1.biznes-armiya.uz",
     "https://blackhawks.vercel.app",
     "https://blackhawks.biznes-armiya.uz",
-
+    
 ]
 
 CSRF_TRUSTED_ORIGINS = [

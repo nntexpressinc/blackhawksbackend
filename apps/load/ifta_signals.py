@@ -26,7 +26,8 @@ def calculate_ifta_values(sender, instance, **kwargs):
         
         # Calculate net_taxible_gallon
         if instance.tax_paid_gallon:
-            instance.net_taxible_gallon = instance.taxible_gallon - instance.tax_paid_gallon
+            tax_paid_gallon = Decimal(str(instance.tax_paid_gallon))
+            instance.net_taxible_gallon = instance.taxible_gallon - tax_paid_gallon
         else:
             instance.net_taxible_gallon = instance.taxible_gallon
         
