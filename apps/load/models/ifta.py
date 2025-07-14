@@ -81,7 +81,7 @@ class Ifta(models.Model):
     ])
     state = models.CharField(max_length=2)
     driver = models.ForeignKey(Driver, on_delete=models.CASCADE)
-    total_miles = models.DecimalField(max_digits=10, decimal_places=2)
+    total_miles = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
     taxible_gallon = models.DecimalField(max_digits=10, decimal_places=3, null=True, blank=True)
     tax_paid_gallon = models.DecimalField(max_digits=10, decimal_places=3, null=True, blank=True)
     net_taxible_gallon = models.DecimalField(max_digits=10, decimal_places=3, null=True, blank=True)
