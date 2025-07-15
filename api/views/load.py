@@ -759,6 +759,7 @@ class DriverPayCreateView(APIView):
                         "tax_amount": f"${tax_amount:.2f}",
                         "total_miles": float(ifta.total_miles) if ifta.total_miles else 0,
                         "taxible_gallon": float(ifta.taxible_gallon) if ifta.taxible_gallon else 0,
+                        "tax_paid_gallon": float(ifta.tax_paid_gallon) if ifta.tax_paid_gallon else 0,
                         "net_taxible_gallon": float(ifta.net_taxible_gallon) if ifta.net_taxible_gallon else 0
                     })
 
