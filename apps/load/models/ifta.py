@@ -63,6 +63,7 @@ class FuelTaxRate(models.Model):
     ])
     rate = models.DecimalField(max_digits=5, decimal_places=3)  # Masalan, 0.285
     mpg = models.DecimalField(max_digits=5, decimal_places=3, null=True, blank=True)  # Masalan, 0.285
+    year = models.IntegerField(null=True, blank=True)  # Yilni saqlash uchun
     class Meta:
         unique_together = ('quarter', 'state')  # Har bir quarter va state uchun faqat bitta rate bo'lsin
 
