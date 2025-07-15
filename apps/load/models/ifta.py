@@ -79,7 +79,7 @@ class Ifta(models.Model):
         ('Quarter 3', 'Quarter 3'),
         ('Quarter 4', 'Quarter 4'),
     ])
-    state = models.CharField(max_length=2)
+    state = models.CharField(max_length=20)
     driver = models.ForeignKey(Driver, on_delete=models.CASCADE)
     total_miles = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
     taxible_gallon = models.DecimalField(max_digits=10, decimal_places=3, null=True, blank=True)
