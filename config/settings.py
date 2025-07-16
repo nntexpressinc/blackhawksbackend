@@ -19,8 +19,6 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
-    # 'rest_framework_simplejwt',
-    # 'apps.audit'
     'apps.auth',
     'apps.load',
     'apps.chat',
@@ -34,11 +32,7 @@ REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
-    ),
-    # 'DEFAULT_PERMISSION_CLASSES': (
-    #     'rest_framework.permissions.IsAuthenticated',
-    # ),
-        
+    ),    
     }
 
 
@@ -84,7 +78,6 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    # 'apps.audit.middleware.AuditMiddleware',
 ]
 
 ROOT_URLCONF = 'config.urls'
@@ -120,6 +113,7 @@ WSGI_APPLICATION = 'config.wsgi.application'
 #         'NAME': BASE_DIR / 'db.sqlite3',
 #     }
 #}
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
