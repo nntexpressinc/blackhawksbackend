@@ -31,7 +31,10 @@ from api.views.load import (
     DriverExpenseDetailView, UnitListView, UnitDetailView, TeamListView,
     TeamDetailView)
 from api.views.load import (
-    FuelTaxRateViewSet, IftaViewSet)
+    FuelTaxRateViewSet, IftaViewSet, IFTAReportListCreateView,
+    IFTAReportDetailView,
+    IFTAReportDownloadView,
+    IFTAReportReprocessView)
 urlpatterns = [
 
     # path('amazon/upload/', amazon.upload_amazon_relay_file, name='upload_file'),
@@ -39,6 +42,17 @@ urlpatterns = [
     # path('amazon/history/', amazon.get_payment_history, name='payment_history'),
     # path('amazon/delete/<int:payment_id>/', amazon.delete_payment, name='delete_payment'),
 
+
+    path('api/ifta-reports/', IFTAReportListCreateView.as_view(), name='ifta-report-list-create'),
+    
+    # Get, update, delete specific report
+    path('api/ifta-reports/<int:pk>/', IFTAReportDetailView.as_view(), name='ifta-report-detail'),
+    
+    # Download result file
+    path('api/ifta-reports/<int:pk>/download/', IFTAReportDownloadView.as_view(), name='ifta-report-download'),
+    
+    # Reprocess report
+    path('api/ifta-reports/<int:pk>/reprocess/', IFTAReportReprocessView.as_view(), name='ifta-report-reprocess'),
 
     path('auth/register/', RegisterUserView.as_view(), name='register-user'),
     path('auth/users/', ListUsersView.as_view(), name='list-users'),

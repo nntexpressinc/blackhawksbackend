@@ -103,3 +103,23 @@ class Ifta(models.Model):
     
     def __str__(self):
         return f"{self.driver.user.email} - {self.quarter} - {self.state} - Week {self.weekly_number}"
+    
+
+class IFTAReport(models.Model):
+    fuel = models.FileField(upload_to='ifta_reports/')
+    mile = models.FileField(upload_to='ifta_reports/')
+    quorter = models.CharField(max_length=10, choices=[  # Note: keeping your spelling
+        ('Quarter 1', 'Quarter 1'),
+        ('Quarter 2', 'Quarter 2'),
+        ('Quarter 3', 'Quarter 3'),
+        ('Quarter 4', 'Quarter 4'),
+    ])
+    result_file = models.FileField(upload_to='ifta_reports/', null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"IFTA Report - {self.quorter}"
+
+    class Meta:
+        ordering = ['-created_at']

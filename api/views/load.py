@@ -1183,3 +1183,142 @@ class IftaViewSet(viewsets.ModelViewSet):
             status=status.HTTP_200_OK
         )
 
+
+# your_app/views.py
+
+from rest_framework import viewsets, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework.parsers import MultiPartParser, FormParser
+from django.http import HttpResponse
+from django.shortcuts import get_object_or_404
+import os
+
+from apps.load.models.ifta import IFTAReport
+from api.dto.load import (
+    IFTAReportSerializer, 
+    IFTAReportCreateSerializer, 
+    IFTAReportListSerializer
+)
+from apps.load.services import process_ifta_report
+
+
+class IFTAReportListCreateView(generics.ListCreateAPIView):
+    """List all IFTA reports and create new ones"""
+    queryset = IFTAReport.objects.all().order_by('-id')
+    parser_classes = [MultiPartParser, FormParser]
+    
+    def get_serializer_class(self):
+        if self.request.method == 'POST':
+            return IFTAReportCreateSerializer
+        return IFTAReportListSerializer
+    
+    def create(self, request, *args, **kwargs):
+        """Create IFTA report and process files"""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        # Save the instance
+        instance = serializer.save()
+        
+        try:
+            # Process the files
+            success = process_ifta_report(instance)
+            
+            if success:
+                # Return the processed report
+                response_serializer = IFTAReportSerializer(instance, context={'request': request})
+                return Response(
+                    {
+                        'message': 'IFTA Report processed successfully',
+                        'data': response_serializer.data
+                    },
+                    status=status.HTTP_201_CREATED
+                )
+            else:
+                # Delete the instance if processing failed
+                instance.delete()
+                return Response(
+                    {'error': 'Failed to process IFTA report files'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+                
+        except Exception as e:
+            # Delete the instance if processing failed
+            instance.delete()
+            return Response(
+                {'error': f'Error processing files: {str(e)}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+
+class IFTAReportDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """Retrieve, update, or delete a specific IFTA report"""
+    queryset = IFTAReport.objects.all()
+    serializer_class = IFTAReportSerializer
+    parser_classes = [MultiPartParser, FormParser]
+
+
+class IFTAReportDownloadView(APIView):
+    """Download the result Excel file"""
+    
+    def get(self, request, pk):
+        report = get_object_or_404(IFTAReport, pk=pk)
+        
+        if not report.result_file:
+            return Response(
+                {'error': 'Result file not available'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Serve the file
+        file_path = report.result_file.path
+        if os.path.exists(file_path):
+            with open(file_path, 'rb') as f:
+                response = HttpResponse(
+                    f.read(),
+                    content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                )
+                response['Content-Disposition'] = f'attachment; filename="{os.path.basename(file_path)}"'
+                return response
+        else:
+            return Response(
+                {'error': 'Result file not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+
+class IFTAReportReprocessView(APIView):
+    """Reprocess the IFTA report"""
+    
+    def post(self, request, pk):
+        report = get_object_or_404(IFTAReport, pk=pk)
+        
+        try:
+            # Clear existing result file
+            if report.result_file:
+                report.result_file.delete()
+            
+            # Reprocess
+            success = process_ifta_report(report)
+            
+            if success:
+                serializer = IFTAReportSerializer(report, context={'request': request})
+                return Response(
+                    {
+                        'message': 'IFTA Report reprocessed successfully',
+                        'data': serializer.data
+                    },
+                    status=status.HTTP_200_OK
+                )
+            else:
+                return Response(
+                    {'error': 'Failed to reprocess IFTA report'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+                
+        except Exception as e:
+            return Response(
+                {'error': f'Error reprocessing files: {str(e)}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )

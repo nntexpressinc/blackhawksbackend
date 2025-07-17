@@ -4,7 +4,7 @@ from api.dto.auth import CustomUserSerializer
 from apps.load.models.driver import Pay, DriverPay, DriverExpense
 from apps.load.models.truck import Unit
 from apps.load.models.team import Team
-
+from apps.load.models.ifta import IFTAReport
 class TeamSerializer(serializers.ModelSerializer):
     class Meta:
         model = Team
@@ -275,3 +275,56 @@ class BulkIftaSerializer(serializers.Serializer):
         
         return created_records
 
+
+class IFTAReportSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = IFTAReport
+        fields = ['id', 'fuel', 'mile', 'quorter', 'result_file', 'created_at']
+        read_only_fields = ['id', 'result_file', 'created_at']
+    
+    def validate_fuel(self, value):
+        """Validate fuel file format"""
+        if not value.name.endswith(('.xlsx', '.xls')):
+            raise serializers.ValidationError("Fuel file must be an Excel file (.xlsx or .xls)")
+        return value
+    
+    def validate_mile(self, value):
+        """Validate mile file format"""
+        if not value.name.endswith('.csv'):
+            raise serializers.ValidationError("Mile file must be a CSV file (.csv)")
+        return value
+
+
+class IFTAReportCreateSerializer(serializers.ModelSerializer):
+    """Serializer for creating IFTA reports"""
+    class Meta:
+        model = IFTAReport
+        fields = ['fuel', 'mile', 'quorter']
+    
+    def validate_fuel(self, value):
+        """Validate fuel file format"""
+        if not value.name.endswith(('.xlsx', '.xls')):
+            raise serializers.ValidationError("Fuel file must be an Excel file (.xlsx or .xls)")
+        return value
+    
+    def validate_mile(self, value):
+        """Validate mile file format"""
+        if not value.name.endswith('.csv'):
+            raise serializers.ValidationError("Mile file must be a CSV file (.csv)")
+        return value
+
+
+class IFTAReportListSerializer(serializers.ModelSerializer):
+    """Serializer for listing IFTA reports"""
+    result_file_url = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = IFTAReport
+        fields = ['id', 'quorter', 'result_file_url', 'created_at']
+    
+    def get_result_file_url(self, obj):
+        if obj.result_file:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.result_file.url)
+        return None
