@@ -716,6 +716,7 @@ class DriverPayCreateView(APIView):
             update_fields = {}
             if invoice_number:
                 update_fields['invoice_number'] = invoice_number
+                update_fields['invoice_status'] = 'Invoiced'
             if weekly_number:
                 update_fields['weekly_number'] = weekly_number
             
@@ -727,6 +728,7 @@ class DriverPayCreateView(APIView):
             load_update_fields = {}
             if invoice_number:
                 load_update_fields['invoice_number'] = invoice_number
+                load_update_fields['invoice_status'] = 'Invoiced'
             if weekly_number:
                 load_update_fields['weekly_number'] = weekly_number
             

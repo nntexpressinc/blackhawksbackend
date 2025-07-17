@@ -57,6 +57,12 @@ class Load(models.Model):
         ('DELIVERED', 'Delivered'),
         ('COMPLETED', 'Completed'),
         )
+    INVOICE_STATUS_CHOICES = (
+        ('NOT_DETERMINED', 'Not Determined'),
+        ('INVOICED', 'Invoiced'),
+        ('PAID', 'Paid'),
+        ('UNPAID', 'Unpaid'),
+    )
     company_name = models.CharField(max_length=200, blank=True, null=True)
     reference_id = models.CharField(max_length=200, blank=True, null=True)
     instructions = models.CharField(max_length=200, blank=True, null=True)
@@ -75,7 +81,7 @@ class Load(models.Model):
     tags = models.ForeignKey(LoadTags, related_name='loadtags', on_delete=models.CASCADE, blank=True, null=True)
     equipment_type = models.CharField(max_length=50, choices=EQUIPMENT_TYPE_CHOICES, blank=True, null=True)
     trip_status = models.CharField(max_length=50, blank=True, null=True)
-    invoice_status = models.CharField(max_length=50, blank=True, null=True, default='Not Determined')
+    invoice_status = models.CharField(max_length=50, choices=INVOICE_STATUS_CHOICES, blank=True, null=True, default='Unpaid')
     trip_bil_status = models.CharField(max_length=50, blank=True, null=True)
     load_pay = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
     driver_pay = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)

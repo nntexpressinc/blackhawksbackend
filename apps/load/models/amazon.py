@@ -275,6 +275,19 @@ def find_and_update_load(trip_id, load_id, gross_pay, main_id=None):
             return matched_load
         
         else:
+    # Agar load topilmasa, reference_id bo'yicha Unpaid qilib yangilashga harakat qilish
+            for ref_id in [trip_id, load_id, main_id]:
+                if ref_id and pd.notna(ref_id):
+                    ref_id_str = str(ref_id).strip()
+                    if ref_id_str:
+                        try:
+                            load_to_update = Load.objects.filter(reference_id=ref_id_str).first()
+                            if load_to_update:
+                                load_to_update.invoice_status = 'Unpaid'
+                                load_to_update.save()
+                                logger.info(f"Load {ref_id_str} invoice_status Unpaid qilindi.")
+                        except Exception as e:
+                            logger.error(f"Load {ref_id_str} ni Unpaid qilishda xatolik: {str(e)}")
             logger.warning(f"Load topilmadi: Trip ID={trip_id}, Load ID={load_id}, Main ID={main_id}")
             return None
             
