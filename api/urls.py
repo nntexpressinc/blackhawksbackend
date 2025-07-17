@@ -43,16 +43,16 @@ urlpatterns = [
     # path('amazon/delete/<int:payment_id>/', amazon.delete_payment, name='delete_payment'),
 
 
-    path('api/ifta-reports/', IFTAReportListCreateView.as_view(), name='ifta-report-list-create'),
+    path('ifta-reports/', IFTAReportListCreateView.as_view(), name='ifta-report-list-create'),
     
     # Get, update, delete specific report
-    path('api/ifta-reports/<int:pk>/', IFTAReportDetailView.as_view(), name='ifta-report-detail'),
+    path('ifta-reports/<int:pk>/', IFTAReportDetailView.as_view(), name='ifta-report-detail'),
     
     # Download result file
-    path('api/ifta-reports/<int:pk>/download/', IFTAReportDownloadView.as_view(), name='ifta-report-download'),
+    path('ifta-reports/<int:pk>/download/', IFTAReportDownloadView.as_view(), name='ifta-report-download'),
     
     # Reprocess report
-    path('api/ifta-reports/<int:pk>/reprocess/', IFTAReportReprocessView.as_view(), name='ifta-report-reprocess'),
+    path('ifta-reports/<int:pk>/reprocess/', IFTAReportReprocessView.as_view(), name='ifta-report-reprocess'),
 
     path('auth/register/', RegisterUserView.as_view(), name='register-user'),
     path('auth/users/', ListUsersView.as_view(), name='list-users'),
