@@ -185,18 +185,19 @@ class GoogleSheetsImportAdmin(admin.ModelAdmin):
     reprocess_imports.short_description = "Tanlangan importlarni qayta ishga tushirish"
 
 
-from apps.load.models.ifta import StateTaxRate, Ifta
+from apps.load.models.ifta import StateTaxRate, IFTAReport
 
 @admin.register(StateTaxRate)
 class StateTaxRateAdmin(admin.ModelAdmin):
-    list_display = ['state', 'tax_rate']
-    list_filter = ['state']
-    search_fields = ['state']
-    ordering = ['state']
+    list_display = ('state', 'rate', 'year')
+    list_filter = ('state', 'year')
+    search_fields = ('state',)
+    ordering = ('state', 'year')
 
-@admin.register(Ifta)
-class IftaAdmin(admin.ModelAdmin):
-    list_display = ['id', 'quarter', 'total_fuel_tax', 'total_miles', 'total_distance']
-    list_filter = ['quarter']
-    search_fields = ['quarter']
-    ordering = ['quarter']
+@admin.register(IFTAReport)
+class IFTAReportAdmin(admin.ModelAdmin):
+    list_display = ('driver', 'quarter', 'state', 'weekly_number', 'total_miles', 'tax', 'created_at')
+    list_filter = ('quarter', 'state', 'weekly_number', 'created_at')
+    search_fields = ('driver__name', 'quarter', 'state', 'invoice_number')
+    readonly_fields = ('taxible_gallon', 'net_taxible_gallon', 'tax', 'created_at', 'updated_at')
+    ordering = ('-created_at',)
