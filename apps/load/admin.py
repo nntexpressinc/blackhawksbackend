@@ -184,3 +184,19 @@ class GoogleSheetsImportAdmin(admin.ModelAdmin):
         self.message_user(request, f"{count} ta import qayta ishga tushirildi")
     reprocess_imports.short_description = "Tanlangan importlarni qayta ishga tushirish"
 
+
+from apps.load.models.ifta import StateTaxRate, Ifta
+
+@admin.register(StateTaxRate)
+class StateTaxRateAdmin(admin.ModelAdmin):
+    list_display = ['state', 'tax_rate']
+    list_filter = ['state']
+    search_fields = ['state']
+    ordering = ['state']
+
+@admin.register(Ifta)
+class IftaAdmin(admin.ModelAdmin):
+    list_display = ['id', 'quarter', 'total_fuel_tax', 'total_miles', 'total_distance']
+    list_filter = ['quarter']
+    search_fields = ['quarter']
+    ordering = ['quarter']
