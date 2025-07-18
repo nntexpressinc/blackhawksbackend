@@ -47,7 +47,7 @@ class IFTAReportProcessor:
     
     def _load_state_tax_rates(self):
         """Load state tax rates from the database"""
-        from your_app.models import StateTaxRate  # Replace 'your_app' with actual app name
+        from apps.load.models.ifta import StateTaxRate  # Replace 'your_app' with actual app name
         
         rates = StateTaxRate.objects.all()
         self.state_tax_rates = {rate.state: float(rate.tax_rate) for rate in rates}
