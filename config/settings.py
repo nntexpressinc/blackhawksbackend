@@ -191,6 +191,7 @@ CSRF_TRUSTED_ORIGINS = [
     "http://tms-beta-ten.vercel.app", 
     "https://ezpzfleet.com",   
     "https://blackhawks.vercel.app",
+    "https://blackhawks.nntexpressinc.com",
     
 ]
 CORS_ALLOW_ALL_ORIGINS = True
