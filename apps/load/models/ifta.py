@@ -161,6 +161,12 @@ class StateTaxRate(models.Model):
     ]
     state = models.CharField(max_length=16, choices=STATE_CHOICES, unique=True)  # State abbreviation (e.g., 'CA', 'TX')
     tax_rate = models.DecimalField(max_digits=5, decimal_places=3)  # Tax rate per gallon
+    quorter = models.CharField(max_length=10, choices=[
+        ('Quarter 1', 'Quarter 1'),
+        ('Quarter 2', 'Quarter 2'),
+        ('Quarter 3', 'Quarter 3'),
+        ('Quarter 4', 'Quarter 4'),
+    ], blank=True, null=True)  # Optional quarter field
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
