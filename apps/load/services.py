@@ -1,10 +1,10 @@
 import pandas as pd
 import openpyxl
-from openpyxl.styles import Font, Alignment, Border, Side
+from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
 from django.core.files.base import ContentFile
 import io
 from collections import defaultdict
-import re
+from apps.load.models.ifta import StateTaxRate
 
 
 class IFTAReportProcessor:
@@ -12,6 +12,8 @@ class IFTAReportProcessor:
         self.ifta_report = ifta_report_instance
         self.fuel_data = None
         self.mile_data = None
+        self.unit_mpg = {}
+        self.overall_mpg = 0
         
     def process_files(self):
         """Main method to process both files and generate the result Excel file"""
@@ -21,6 +23,9 @@ class IFTAReportProcessor:
             
             # Process mile CSV file
             self.mile_data = self._process_mile_file()
+            
+            # Calculate MPG values
+            self._calculate_mpg()
             
             # Generate result Excel file
             result_file = self._generate_result_excel()
@@ -33,7 +38,7 @@ class IFTAReportProcessor:
             
         except Exception as e:
             print(f"Error processing files: {str(e)}")
-            raise e  # Re-raise for proper error handling in API
+            raise e
     
     def _process_fuel_file(self):
         """Process the fuel Excel file and extract required data"""
@@ -51,100 +56,118 @@ class IFTAReportProcessor:
         # Clean data - remove any null values
         fuel_df = fuel_df.dropna(subset=required_columns)
         
-        # Group by LocationState and sum Quantity
+        # Group by LocationState and sum Quantity (GALLON PER STATE)
         state_quantity = fuel_df.groupby('LocationState')['Quantity'].sum().to_dict()
         
         # Group by Unit and LocationState, sum Quantity
         unit_state_quantity = fuel_df.groupby(['Unit', 'LocationState'])['Quantity'].sum().reset_index()
         
+        # Group by Unit only, sum Quantity
+        unit_total_quantity = fuel_df.groupby('Unit')['Quantity'].sum().to_dict()
+        
         # Get unique units
-        unique_units = fuel_df['Unit'].unique()
+        unique_units = sorted(fuel_df['Unit'].unique())
         
         return {
             'state_quantity': state_quantity,
             'unit_state_quantity': unit_state_quantity,
+            'unit_total_quantity': unit_total_quantity,
             'unique_units': unique_units,
             'total_quantity': fuel_df['Quantity'].sum()
         }
     
     def _process_mile_file(self):
-        """Process the mile CSV file and extract required data"""
+        """Process the mile CSV file with new format (Unit, State, Miles)"""
         # Read CSV file
         mile_df = pd.read_csv(self.ifta_report.mile.path)
         
-        # Find State and Miles column pairs
-        state_columns = [col for col in mile_df.columns if col.startswith('State')]
-        miles_columns = [col for col in mile_df.columns if col.startswith('Miles')]
+        # Extract required columns
+        required_columns = ['Unit', 'State', 'Miles']
         
-        # Extract unit numbers from column names
-        state_units = {}
-        miles_units = {}
+        # Check if required columns exist
+        for col in required_columns:
+            if col not in mile_df.columns:
+                raise ValueError(f"Required column '{col}' not found in mile CSV file")
         
-        for col in state_columns:
-            unit_match = re.search(r'State(\d+)', col)
-            if unit_match:
-                unit = int(unit_match.group(1))
-                state_units[unit] = col
+        # Clean data - remove any null values
+        mile_df = mile_df.dropna(subset=required_columns)
         
-        for col in miles_columns:
-            unit_match = re.search(r'Miles(\d+)', col)
-            if unit_match:
-                unit = int(unit_match.group(1))
-                miles_units[unit] = col
+        # Group by State and sum Miles (MILEAGE PER STATE)
+        state_miles = mile_df.groupby('State')['Miles'].sum().to_dict()
         
-        # Process data for each unit
-        unit_miles_data = {}
-        state_miles_totals = defaultdict(float)
+        # Group by Unit and State, sum Miles
+        unit_state_miles = mile_df.groupby(['Unit', 'State'])['Miles'].sum().reset_index()
         
-        for unit in state_units.keys():
-            if unit in miles_units:
-                state_col = state_units[unit]
-                miles_col = miles_units[unit]
-                
-                # Remove null values and group by state
-                valid_data = mile_df.dropna(subset=[state_col, miles_col])
-                unit_data = valid_data.groupby(state_col)[miles_col].sum().to_dict()
-                unit_miles_data[unit] = unit_data
-                
-                # Add to overall state totals
-                for state, miles in unit_data.items():
-                    state_miles_totals[state] += miles
+        # Group by Unit only, sum Miles
+        unit_total_miles = mile_df.groupby('Unit')['Miles'].sum().to_dict()
         
         return {
-            'unit_miles_data': unit_miles_data,
-            'state_miles_totals': dict(state_miles_totals),
-            'total_miles': sum(state_miles_totals.values())
+            'state_miles': state_miles,
+            'unit_state_miles': unit_state_miles,
+            'unit_total_miles': unit_total_miles,
+            'total_miles': mile_df['Miles'].sum()
         }
     
+    def _calculate_mpg(self):
+        """Calculate MPG for each unit and overall MPG"""
+        # Calculate MPG for each unit
+        for unit in self.fuel_data['unique_units']:
+            unit_miles = self.mile_data['unit_total_miles'].get(unit, 0)
+            unit_quantity = self.fuel_data['unit_total_quantity'].get(unit, 0)
+            
+            if unit_quantity > 0:
+                self.unit_mpg[unit] = unit_miles / unit_quantity
+            else:
+                self.unit_mpg[unit] = 0
+        
+        # Calculate overall MPG
+        if self.fuel_data['total_quantity'] > 0:
+            self.overall_mpg = self.mile_data['total_miles'] / self.fuel_data['total_quantity']
+        else:
+            self.overall_mpg = 0
+    
+    def _get_tax_rate(self, state):
+        """Get tax rate for a specific state and quarter"""
+        try:
+            tax_rate_obj = StateTaxRate.objects.get(
+                state=state, 
+                quorter=self.ifta_report.quorter
+            )
+            return float(tax_rate_obj.tax_rate)
+        except StateTaxRate.DoesNotExist:
+            print(f"Tax rate not found for state {state} and quarter {self.ifta_report.quorter}")
+            return 0.0
+    
     def _generate_result_excel(self):
-        """Generate the result Excel file with three tables"""
+        """Generate the result Excel file with the new table structure"""
         # Create workbook and worksheet
         wb = openpyxl.Workbook()
         ws = wb.active
         ws.title = f"IFTA Report - {self.ifta_report.quorter}"
         
         # Set up styles
-        header_font = Font(bold=True, size=12)
-        total_font = Font(bold=True, size=11)
+        header_font = Font(bold=True, size=11)
+        total_font = Font(bold=True, size=10)
         border = Border(
             left=Side(style='thin'),
             right=Side(style='thin'),
             top=Side(style='thin'),
             bottom=Side(style='thin')
         )
+        green_fill = PatternFill(start_color="90EE90", end_color="90EE90", fill_type="solid")
         
         current_row = 1
         
-        # Table 1: State Quantity Summary
-        current_row = self._add_table_1(ws, current_row, header_font, total_font, border)
-        current_row += 2  # Add spacing
+        # Table 1: Summary Table per State and Unit
+        current_row = self._add_summary_table(ws, current_row, header_font, total_font, border, green_fill)
+        current_row += 2
         
-        # Table 2: State Miles Summary
-        current_row = self._add_table_2(ws, current_row, header_font, total_font, border)
-        current_row += 2  # Add spacing
+        # Table 2: Per-State Tax Table (next to Table 1, but we'll put it below for simplicity)
+        current_row = self._add_state_tax_table(ws, current_row, header_font, total_font, border)
+        current_row += 2
         
-        # Table 3: MPG Calculations by Unit
-        current_row = self._add_table_3(ws, current_row, header_font, total_font, border)
+        # Table 3: Detailed Tax Table per Unit
+        current_row = self._add_detailed_tax_table(ws, current_row, header_font, total_font, border)
         
         # Auto-adjust column widths
         for column in ws.columns:
@@ -156,7 +179,7 @@ class IFTAReportProcessor:
                         max_length = len(str(cell.value))
                 except:
                     pass
-            adjusted_width = min(max_length + 2, 50)
+            adjusted_width = min(max_length + 2, 20)
             ws.column_dimensions[column_letter].width = adjusted_width
         
         # Save to BytesIO
@@ -168,150 +191,360 @@ class IFTAReportProcessor:
         filename = f"ifta_report_{self.ifta_report.quorter.replace(' ', '_').lower()}.xlsx"
         return ContentFile(excel_buffer.getvalue(), name=filename)
     
-    def _add_table_1(self, ws, start_row, header_font, total_font, border):
-        """Add Table 1: State Quantity Summary"""
+    def _add_summary_table(self, ws, start_row, header_font, total_font, border, green_fill):
+        """Add Table 1: Summary Table per State and Unit"""
         # Title
-        ws.cell(row=start_row, column=1, value="Table 1: Fuel Quantity by State")
+        ws.cell(row=start_row, column=1, value="Table 1: Summary per State and Unit")
         ws.cell(row=start_row, column=1).font = Font(bold=True, size=14)
         start_row += 2
         
-        # Headers
-        ws.cell(row=start_row, column=1, value="State")
-        ws.cell(row=start_row, column=2, value="Quantity")
+        # Get all states from both fuel and mile data
+        all_states = set(self.fuel_data['state_quantity'].keys()) | set(self.mile_data['state_miles'].keys())
+        all_states = sorted(all_states)
+        unique_units = self.fuel_data['unique_units']
         
-        for col in range(1, 3):
-            cell = ws.cell(row=start_row, column=col)
-            cell.font = header_font
-            cell.border = border
-            cell.alignment = Alignment(horizontal='center')
+        # Headers
+        col = 1
+        ws.cell(row=start_row, column=col, value="State")
+        ws.cell(row=start_row, column=col).font = header_font
+        ws.cell(row=start_row, column=col).border = border
+        col += 1
+        
+        # Unit columns (quantity and miles for each unit)
+        for unit in unique_units:
+            # Unit quantity column
+            ws.cell(row=start_row, column=col, value=str(unit))
+            ws.cell(row=start_row, column=col).font = header_font
+            ws.cell(row=start_row, column=col).border = border
+            col += 1
+            
+            # Unit mileage column
+            ws.cell(row=start_row, column=col, value=f"{unit} mileage")
+            ws.cell(row=start_row, column=col).font = header_font
+            ws.cell(row=start_row, column=col).border = border
+            col += 1
+        
+        # GALLON PER STATE and MILEAGE PER STATE columns
+        ws.cell(row=start_row, column=col, value="GALLON PER STATE")
+        ws.cell(row=start_row, column=col).font = header_font
+        ws.cell(row=start_row, column=col).border = border
+        ws.cell(row=start_row, column=col).fill = green_fill
+        col += 1
+        
+        ws.cell(row=start_row, column=col, value="MILEAGE PER STATE")
+        ws.cell(row=start_row, column=col).font = header_font
+        ws.cell(row=start_row, column=col).border = border
+        ws.cell(row=start_row, column=col).fill = green_fill
         
         start_row += 1
         
         # Data rows
-        for state, quantity in sorted(self.fuel_data['state_quantity'].items()):
-            ws.cell(row=start_row, column=1, value=state)
-            ws.cell(row=start_row, column=2, value=int(quantity))  # Whole numbers only
+        unit_quantity_totals = {unit: 0 for unit in unique_units}
+        unit_miles_totals = {unit: 0 for unit in unique_units}
+        total_gallon_per_state = 0
+        total_mileage_per_state = 0
+        
+        for state in all_states:
+            col = 1
+            ws.cell(row=start_row, column=col, value=state)
+            ws.cell(row=start_row, column=col).border = border
+            col += 1
             
-            for col in range(1, 3):
+            state_gallon_total = 0
+            state_miles_total = 0
+            
+            for unit in unique_units:
+                # Get quantity for this unit and state
+                unit_state_df = self.fuel_data['unit_state_quantity']
+                quantity = unit_state_df[
+                    (unit_state_df['Unit'] == unit) & 
+                    (unit_state_df['LocationState'] == state)
+                ]['Quantity'].sum()
+                
+                ws.cell(row=start_row, column=col, value=int(quantity) if quantity > 0 else 0)
                 ws.cell(row=start_row, column=col).border = border
+                unit_quantity_totals[unit] += quantity
+                state_gallon_total += quantity
+                col += 1
+                
+                # Get miles for this unit and state
+                unit_miles_df = self.mile_data['unit_state_miles']
+                miles = unit_miles_df[
+                    (unit_miles_df['Unit'] == unit) & 
+                    (unit_miles_df['State'] == state)
+                ]['Miles'].sum()
+                
+                ws.cell(row=start_row, column=col, value=int(miles) if miles > 0 else 0)
+                ws.cell(row=start_row, column=col).border = border
+                unit_miles_totals[unit] += miles
+                state_miles_total += miles
+                col += 1
+            
+            # GALLON PER STATE
+            ws.cell(row=start_row, column=col, value=int(state_gallon_total))
+            ws.cell(row=start_row, column=col).border = border
+            ws.cell(row=start_row, column=col).fill = green_fill
+            total_gallon_per_state += state_gallon_total
+            col += 1
+            
+            # MILEAGE PER STATE
+            ws.cell(row=start_row, column=col, value=int(state_miles_total))
+            ws.cell(row=start_row, column=col).border = border
+            ws.cell(row=start_row, column=col).fill = green_fill
+            total_mileage_per_state += state_miles_total
+            
+            start_row += 1
+        
+        # Total row
+        col = 1
+        ws.cell(row=start_row, column=col, value="TOTAL")
+        ws.cell(row=start_row, column=col).font = total_font
+        ws.cell(row=start_row, column=col).border = border
+        col += 1
+        
+        for unit in unique_units:
+            # Unit quantity total
+            ws.cell(row=start_row, column=col, value=int(unit_quantity_totals[unit]))
+            ws.cell(row=start_row, column=col).font = total_font
+            ws.cell(row=start_row, column=col).border = border
+            col += 1
+            
+            # Unit miles total
+            ws.cell(row=start_row, column=col, value=int(unit_miles_totals[unit]))
+            ws.cell(row=start_row, column=col).font = total_font
+            ws.cell(row=start_row, column=col).border = border
+            col += 1
+        
+        # Total GALLON PER STATE
+        ws.cell(row=start_row, column=col, value=int(total_gallon_per_state))
+        ws.cell(row=start_row, column=col).font = total_font
+        ws.cell(row=start_row, column=col).border = border
+        ws.cell(row=start_row, column=col).fill = green_fill
+        col += 1
+        
+        # Total MILEAGE PER STATE
+        ws.cell(row=start_row, column=col, value=int(total_mileage_per_state))
+        ws.cell(row=start_row, column=col).font = total_font
+        ws.cell(row=start_row, column=col).border = border
+        ws.cell(row=start_row, column=col).fill = green_fill
+        
+        # Add MPG row
+        start_row += 1
+        ws.cell(row=start_row, column=1, value="MPG")
+        ws.cell(row=start_row, column=1).font = total_font
+        ws.cell(row=start_row, column=1).border = border
+        
+        # Calculate and display MPG for each unit
+        col = 2
+        for unit in unique_units:
+            # Unit MPG
+            mpg = self.unit_mpg.get(unit, 0)
+            ws.cell(row=start_row, column=col, value=f"{mpg:.2f}")
+            ws.cell(row=start_row, column=col).font = total_font
+            ws.cell(row=start_row, column=col).border = border
+            col += 2  # Skip miles column
+        
+        # Overall MPG in the last column
+        ws.cell(row=start_row, column=col + 1, value=f"{self.overall_mpg:.2f}")
+        ws.cell(row=start_row, column=col + 1).font = total_font
+        ws.cell(row=start_row, column=col + 1).border = border
+        ws.cell(row=start_row, column=col + 1).fill = green_fill
+        
+        return start_row + 1
+    
+    def _add_state_tax_table(self, ws, start_row, header_font, total_font, border):
+        """Add Table 2: Per-State Tax Table"""
+        # Title
+        ws.cell(row=start_row, column=1, value="Table 2: Per-State Tax Calculations")
+        ws.cell(row=start_row, column=1).font = Font(bold=True, size=14)
+        start_row += 2
+        
+        # Headers
+        headers = ["State", "Taxible Gallon", "Net Taxible Gallon", "TAX"]
+        for col, header in enumerate(headers, 1):
+            ws.cell(row=start_row, column=col, value=header)
+            ws.cell(row=start_row, column=col).font = header_font
+            ws.cell(row=start_row, column=col).border = border
+        
+        start_row += 1
+        
+        # Get all states
+        all_states = set(self.fuel_data['state_quantity'].keys()) | set(self.mile_data['state_miles'].keys())
+        all_states = sorted(all_states)
+        
+        total_taxible = 0
+        total_net_taxible = 0
+        total_tax = 0
+        
+        for state in all_states:
+            mileage_per_state = self.mile_data['state_miles'].get(state, 0)
+            gallon_per_state = self.fuel_data['state_quantity'].get(state, 0)
+            
+            # Taxible Gallon = MILEAGE PER STATE / overall MPG
+            taxible_gallon = mileage_per_state / self.overall_mpg if self.overall_mpg > 0 else 0
+            
+            # Net Taxible Gallon = Taxible Gallon - GALLON PER STATE
+            net_taxible_gallon = taxible_gallon - gallon_per_state
+            
+            # TAX = Net Taxible Gallon × tax_rate
+            tax_rate = self._get_tax_rate(state)
+            tax = net_taxible_gallon * tax_rate
+            
+            # Add to totals
+            total_taxible += taxible_gallon
+            total_net_taxible += net_taxible_gallon
+            total_tax += tax
+            
+            # Write data
+            ws.cell(row=start_row, column=1, value=state)
+            ws.cell(row=start_row, column=1).border = border
+            
+            ws.cell(row=start_row, column=2, value=int(taxible_gallon))
+            ws.cell(row=start_row, column=2).border = border
+            
+            ws.cell(row=start_row, column=3, value=int(net_taxible_gallon))
+            ws.cell(row=start_row, column=3).border = border
+            
+            ws.cell(row=start_row, column=4, value=f"${tax:.2f}")
+            ws.cell(row=start_row, column=4).border = border
             
             start_row += 1
         
         # Total row
         ws.cell(row=start_row, column=1, value="TOTAL")
-        ws.cell(row=start_row, column=2, value=int(self.fuel_data['total_quantity']))
+        ws.cell(row=start_row, column=1).font = total_font
+        ws.cell(row=start_row, column=1).border = border
         
-        for col in range(1, 3):
-            cell = ws.cell(row=start_row, column=col)
-            cell.font = total_font
-            cell.border = border
-            if col == 1:
-                cell.alignment = Alignment(horizontal='center')
+        ws.cell(row=start_row, column=2, value=int(total_taxible))
+        ws.cell(row=start_row, column=2).font = total_font
+        ws.cell(row=start_row, column=2).border = border
+        
+        ws.cell(row=start_row, column=3, value=int(total_net_taxible))
+        ws.cell(row=start_row, column=3).font = total_font
+        ws.cell(row=start_row, column=3).border = border
+        
+        ws.cell(row=start_row, column=4, value=f"${total_tax:.2f}")
+        ws.cell(row=start_row, column=4).font = total_font
+        ws.cell(row=start_row, column=4).border = border
         
         return start_row + 1
     
-    def _add_table_2(self, ws, start_row, header_font, total_font, border):
-        """Add Table 2: State Miles Summary"""
+    def _add_detailed_tax_table(self, ws, start_row, header_font, total_font, border):
+        """Add Table 3: Detailed Tax Table per Unit"""
         # Title
-        ws.cell(row=start_row, column=1, value="Table 2: Miles by State")
+        ws.cell(row=start_row, column=1, value="Table 3: Detailed Tax Calculations per Unit")
         ws.cell(row=start_row, column=1).font = Font(bold=True, size=14)
         start_row += 2
         
-        # Headers
-        ws.cell(row=start_row, column=1, value="State")
-        ws.cell(row=start_row, column=2, value="Miles")
+        unique_units = self.fuel_data['unique_units']
+        all_states = set(self.fuel_data['state_quantity'].keys()) | set(self.mile_data['state_miles'].keys())
+        all_states = sorted(all_states)
         
-        for col in range(1, 3):
-            cell = ws.cell(row=start_row, column=col)
-            cell.font = header_font
-            cell.border = border
-            cell.alignment = Alignment(horizontal='center')
+        # Headers
+        col = 1
+        ws.cell(row=start_row, column=col, value="State")
+        ws.cell(row=start_row, column=col).font = header_font
+        ws.cell(row=start_row, column=col).border = border
+        col += 1
+        
+        # For each unit, create 3 columns: Taxible Gallon, Net Taxible Gallon, TAX
+        for unit in unique_units:
+            ws.cell(row=start_row, column=col, value=f"{unit} Taxible Gallon")
+            ws.cell(row=start_row, column=col).font = header_font
+            ws.cell(row=start_row, column=col).border = border
+            col += 1
+            
+            ws.cell(row=start_row, column=col, value=f"{unit} Net Taxible Gallon")
+            ws.cell(row=start_row, column=col).font = header_font
+            ws.cell(row=start_row, column=col).border = border
+            col += 1
+            
+            ws.cell(row=start_row, column=col, value=f"{unit} TAX")
+            ws.cell(row=start_row, column=col).font = header_font
+            ws.cell(row=start_row, column=col).border = border
+            col += 1
         
         start_row += 1
         
+        # Initialize totals for each unit
+        unit_totals = {unit: {'taxible': 0, 'net_taxible': 0, 'tax': 0} for unit in unique_units}
+        
         # Data rows
-        for state, miles in sorted(self.mile_data['state_miles_totals'].items()):
-            ws.cell(row=start_row, column=1, value=state)
-            ws.cell(row=start_row, column=2, value=int(miles))  # Whole numbers only
+        for state in all_states:
+            col = 1
+            ws.cell(row=start_row, column=col, value=state)
+            ws.cell(row=start_row, column=col).border = border
+            col += 1
             
-            for col in range(1, 3):
+            tax_rate = self._get_tax_rate(state)
+            
+            for unit in unique_units:
+                # Get miles for this unit and state
+                unit_miles_df = self.mile_data['unit_state_miles']
+                miles = unit_miles_df[
+                    (unit_miles_df['Unit'] == unit) & 
+                    (unit_miles_df['State'] == state)
+                ]['Miles'].sum()
+                
+                # Get quantity for this unit and state
+                unit_state_df = self.fuel_data['unit_state_quantity']
+                quantity = unit_state_df[
+                    (unit_state_df['Unit'] == unit) & 
+                    (unit_state_df['LocationState'] == state)
+                ]['Quantity'].sum()
+                
+                # Taxible Gallon = Miles for that Unit and State / MPG of that Unit
+                unit_mpg = self.unit_mpg.get(unit, 0)
+                taxible_gallon = miles / unit_mpg if unit_mpg > 0 else 0
+                
+                # Net Taxible Gallon = Taxible Gallon - Quantity for that Unit and State
+                net_taxible_gallon = taxible_gallon - quantity
+                
+                # TAX = Net Taxible Gallon × tax_rate
+                tax = net_taxible_gallon * tax_rate
+                
+                # Add to unit totals
+                unit_totals[unit]['taxible'] += taxible_gallon
+                unit_totals[unit]['net_taxible'] += net_taxible_gallon
+                unit_totals[unit]['tax'] += tax
+                
+                # Write data
+                ws.cell(row=start_row, column=col, value=int(taxible_gallon))
                 ws.cell(row=start_row, column=col).border = border
+                col += 1
+                
+                ws.cell(row=start_row, column=col, value=int(net_taxible_gallon))
+                ws.cell(row=start_row, column=col).border = border
+                col += 1
+                
+                ws.cell(row=start_row, column=col, value=f"${tax:.2f}")
+                ws.cell(row=start_row, column=col).border = border
+                col += 1
             
             start_row += 1
         
         # Total row
-        ws.cell(row=start_row, column=1, value="TOTAL")
-        ws.cell(row=start_row, column=2, value=int(self.mile_data['total_miles']))
+        col = 1
+        ws.cell(row=start_row, column=col, value="TOTAL")
+        ws.cell(row=start_row, column=col).font = total_font
+        ws.cell(row=start_row, column=col).border = border
+        col += 1
         
-        for col in range(1, 3):
-            cell = ws.cell(row=start_row, column=col)
-            cell.font = total_font
-            cell.border = border
-            if col == 1:
-                cell.alignment = Alignment(horizontal='center')
-        
-        return start_row + 1
-    
-    def _add_table_3(self, ws, start_row, header_font, total_font, border):
-        """Add Table 3: MPG Calculations by Unit"""
-        # Title
-        ws.cell(row=start_row, column=1, value="Table 3: MPG by Unit")
-        ws.cell(row=start_row, column=1).font = Font(bold=True, size=14)
-        start_row += 2
-        
-        # Headers
-        ws.cell(row=start_row, column=1, value="Unit")
-        ws.cell(row=start_row, column=2, value="MPG")
-        
-        for col in range(1, 3):
-            cell = ws.cell(row=start_row, column=col)
-            cell.font = header_font
-            cell.border = border
-            cell.alignment = Alignment(horizontal='center')
-        
-        start_row += 1
-        
-        # Calculate MPG for each unit
-        for unit in sorted(self.fuel_data['unique_units']):
-            # Get total quantity for this unit
-            unit_quantity = self.fuel_data['unit_state_quantity'][
-                self.fuel_data['unit_state_quantity']['Unit'] == unit
-            ]['Quantity'].sum()
+        for unit in unique_units:
+            ws.cell(row=start_row, column=col, value=int(unit_totals[unit]['taxible']))
+            ws.cell(row=start_row, column=col).font = total_font
+            ws.cell(row=start_row, column=col).border = border
+            col += 1
             
-            # Get total miles for this unit
-            unit_miles = 0
-            if unit in self.mile_data['unit_miles_data']:
-                unit_miles = sum(self.mile_data['unit_miles_data'][unit].values())
+            ws.cell(row=start_row, column=col, value=int(unit_totals[unit]['net_taxible']))
+            ws.cell(row=start_row, column=col).font = total_font
+            ws.cell(row=start_row, column=col).border = border
+            col += 1
             
-            # Calculate MPG (avoid division by zero)
-            if unit_miles > 0:
-                mpg = int(unit_quantity / unit_miles)  # Whole numbers only
-            else:
-                mpg = 0
-            
-            ws.cell(row=start_row, column=1, value=str(unit))
-            ws.cell(row=start_row, column=2, value=mpg)
-            
-            for col in range(1, 3):
-                ws.cell(row=start_row, column=col).border = border
-            
-            start_row += 1
-        
-        # Overall MPG
-        if self.mile_data['total_miles'] > 0:
-            overall_mpg = int(self.fuel_data['total_quantity'] / self.mile_data['total_miles'])
-        else:
-            overall_mpg = 0
-        
-        ws.cell(row=start_row, column=1, value="OVERALL MPG")
-        ws.cell(row=start_row, column=2, value=overall_mpg)
-        
-        for col in range(1, 3):
-            cell = ws.cell(row=start_row, column=col)
-            cell.font = total_font
-            cell.border = border
-            if col == 1:
-                cell.alignment = Alignment(horizontal='center')
+            ws.cell(row=start_row, column=col, value=f"${unit_totals[unit]['tax']:.2f}")
+            ws.cell(row=start_row, column=col).font = total_font
+            ws.cell(row=start_row, column=col).border = border
+            col += 1
         
         return start_row + 1
 
