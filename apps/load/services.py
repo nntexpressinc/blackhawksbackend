@@ -192,7 +192,7 @@ class IFTAReportProcessor:
         return ContentFile(excel_buffer.getvalue(), name=filename)
     
     def _add_summary_table(self, ws, start_row, header_font, total_font, border, green_fill):
-        """Add Table 1: Summary Table per State and Unit"""
+        """Add Table 1: Summary Table per State and Unit - Use decimals except for GALLON PER STATE and MILEAGE PER STATE"""
         # Title
         ws.cell(row=start_row, column=1, value="Table 1: Summary per State and Unit")
         ws.cell(row=start_row, column=1).font = Font(bold=True, size=14)
@@ -261,7 +261,8 @@ class IFTAReportProcessor:
                     (unit_state_df['LocationState'] == state)
                 ]['Quantity'].sum()
                 
-                ws.cell(row=start_row, column=col, value=int(quantity) if quantity > 0 else 0)
+                # Use decimal format (2 decimal places) for unit quantities
+                ws.cell(row=start_row, column=col, value=f"{quantity:.2f}" if quantity > 0 else "0.00")
                 ws.cell(row=start_row, column=col).border = border
                 unit_quantity_totals[unit] += quantity
                 state_gallon_total += quantity
@@ -274,20 +275,21 @@ class IFTAReportProcessor:
                     (unit_miles_df['State'] == state)
                 ]['Miles'].sum()
                 
-                ws.cell(row=start_row, column=col, value=int(miles) if miles > 0 else 0)
+                # Use decimal format (2 decimal places) for unit miles
+                ws.cell(row=start_row, column=col, value=f"{miles:.2f}" if miles > 0 else "0.00")
                 ws.cell(row=start_row, column=col).border = border
                 unit_miles_totals[unit] += miles
                 state_miles_total += miles
                 col += 1
             
-            # GALLON PER STATE
+            # GALLON PER STATE - keep as integer
             ws.cell(row=start_row, column=col, value=int(state_gallon_total))
             ws.cell(row=start_row, column=col).border = border
             ws.cell(row=start_row, column=col).fill = green_fill
             total_gallon_per_state += state_gallon_total
             col += 1
             
-            # MILEAGE PER STATE
+            # MILEAGE PER STATE - keep as integer
             ws.cell(row=start_row, column=col, value=int(state_miles_total))
             ws.cell(row=start_row, column=col).border = border
             ws.cell(row=start_row, column=col).fill = green_fill
@@ -303,26 +305,26 @@ class IFTAReportProcessor:
         col += 1
         
         for unit in unique_units:
-            # Unit quantity total
-            ws.cell(row=start_row, column=col, value=int(unit_quantity_totals[unit]))
+            # Unit quantity total - decimal format
+            ws.cell(row=start_row, column=col, value=f"{unit_quantity_totals[unit]:.2f}")
             ws.cell(row=start_row, column=col).font = total_font
             ws.cell(row=start_row, column=col).border = border
             col += 1
             
-            # Unit miles total
-            ws.cell(row=start_row, column=col, value=int(unit_miles_totals[unit]))
+            # Unit miles total - decimal format
+            ws.cell(row=start_row, column=col, value=f"{unit_miles_totals[unit]:.2f}")
             ws.cell(row=start_row, column=col).font = total_font
             ws.cell(row=start_row, column=col).border = border
             col += 1
         
-        # Total GALLON PER STATE
+        # Total GALLON PER STATE - keep as integer
         ws.cell(row=start_row, column=col, value=int(total_gallon_per_state))
         ws.cell(row=start_row, column=col).font = total_font
         ws.cell(row=start_row, column=col).border = border
         ws.cell(row=start_row, column=col).fill = green_fill
         col += 1
         
-        # Total MILEAGE PER STATE
+        # Total MILEAGE PER STATE - keep as integer
         ws.cell(row=start_row, column=col, value=int(total_mileage_per_state))
         ws.cell(row=start_row, column=col).font = total_font
         ws.cell(row=start_row, column=col).border = border
@@ -353,7 +355,7 @@ class IFTAReportProcessor:
         return start_row + 1
     
     def _add_state_tax_table(self, ws, start_row, header_font, total_font, border):
-        """Add Table 2: Per-State Tax Table"""
+        """Add Table 2: Per-State Tax Table - Keep all as integers"""
         # Title
         ws.cell(row=start_row, column=1, value="Table 2: Per-State Tax Calculations")
         ws.cell(row=start_row, column=1).font = Font(bold=True, size=14)
@@ -395,7 +397,7 @@ class IFTAReportProcessor:
             total_net_taxible += net_taxible_gallon
             total_tax += tax
             
-            # Write data
+            # Write data - keep as integers as requested
             ws.cell(row=start_row, column=1, value=state)
             ws.cell(row=start_row, column=1).border = border
             
@@ -430,7 +432,7 @@ class IFTAReportProcessor:
         return start_row + 1
     
     def _add_detailed_tax_table(self, ws, start_row, header_font, total_font, border):
-        """Add Table 3: Detailed Tax Table per Unit"""
+        """Add Table 3: Detailed Tax Table per Unit - Use decimal numbers"""
         # Title
         ws.cell(row=start_row, column=1, value="Table 3: Detailed Tax Calculations per Unit")
         ws.cell(row=start_row, column=1).font = Font(bold=True, size=14)
@@ -508,12 +510,12 @@ class IFTAReportProcessor:
                 unit_totals[unit]['net_taxible'] += net_taxible_gallon
                 unit_totals[unit]['tax'] += tax
                 
-                # Write data
-                ws.cell(row=start_row, column=col, value=int(taxible_gallon))
+                # Write data - use decimal format (2 decimal places)
+                ws.cell(row=start_row, column=col, value=f"{taxible_gallon:.2f}")
                 ws.cell(row=start_row, column=col).border = border
                 col += 1
                 
-                ws.cell(row=start_row, column=col, value=int(net_taxible_gallon))
+                ws.cell(row=start_row, column=col, value=f"{net_taxible_gallon:.2f}")
                 ws.cell(row=start_row, column=col).border = border
                 col += 1
                 
@@ -531,12 +533,13 @@ class IFTAReportProcessor:
         col += 1
         
         for unit in unique_units:
-            ws.cell(row=start_row, column=col, value=int(unit_totals[unit]['taxible']))
+            # Use decimal format for totals
+            ws.cell(row=start_row, column=col, value=f"{unit_totals[unit]['taxible']:.2f}")
             ws.cell(row=start_row, column=col).font = total_font
             ws.cell(row=start_row, column=col).border = border
             col += 1
             
-            ws.cell(row=start_row, column=col, value=int(unit_totals[unit]['net_taxible']))
+            ws.cell(row=start_row, column=col, value=f"{unit_totals[unit]['net_taxible']:.2f}")
             ws.cell(row=start_row, column=col).font = total_font
             ws.cell(row=start_row, column=col).border = border
             col += 1
