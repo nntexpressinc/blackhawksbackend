@@ -407,7 +407,7 @@ class IFTAReportProcessor:
             ws.cell(row=start_row, column=3, value=int(net_taxible_gallon))
             ws.cell(row=start_row, column=3).border = border
             
-            ws.cell(row=start_row, column=4, value=f"${tax:.2f}")
+            ws.cell(row=start_row, column=4, value=int(tax))
             ws.cell(row=start_row, column=4).border = border
             
             start_row += 1
@@ -425,7 +425,7 @@ class IFTAReportProcessor:
         ws.cell(row=start_row, column=3).font = total_font
         ws.cell(row=start_row, column=3).border = border
         
-        ws.cell(row=start_row, column=4, value=f"${total_tax:.2f}")
+        ws.cell(row=start_row, column=4, value=int(total_tax))
         ws.cell(row=start_row, column=4).font = total_font
         ws.cell(row=start_row, column=4).border = border
         
