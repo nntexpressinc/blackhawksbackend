@@ -1338,7 +1338,6 @@ import fitz  # PyMuPDF
 import json
 
 
-openai.api_key = "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"
 
 class RateConUploadView(APIView):
     def post(self, request):
@@ -1372,7 +1371,7 @@ class RateConUploadView(APIView):
 
     import openai
 
-    openai.api_key = "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"
+    openai.api_key = "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"
 
     def _ask_ai_for_data(self, text):
         response = openai.chat.completions.create(
