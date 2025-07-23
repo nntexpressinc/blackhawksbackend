@@ -1369,9 +1369,11 @@ class RateConUploadView(APIView):
                 text += page.get_text()
         return text
 
-    import openai
+    import os
+    from dotenv import load_dotenv
 
-    openai.api_key = "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"
+    load_dotenv()
+    openai.api_key = os.getenv("OPENAI_API_KEY")
 
     def _ask_ai_for_data(self, text):
         response = openai.chat.completions.create(
