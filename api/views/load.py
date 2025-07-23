@@ -1370,10 +1370,12 @@ class RateConUploadView(APIView):
                 text += page.get_text()
         return text
 
+    import openai
+
+    openai.api_key = "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"
+
     def _ask_ai_for_data(self, text):
-        
-        client = OpenAI(api_key="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")
-        response = client.chat.completions.create(
+        response = openai.chat.completions.create(
             model="gpt-4-0613",
             messages=[
                 {"role": "system", "content": "You are a logistics assistant that extracts structured JSON data from shipping rate confirmation documents."},
@@ -1382,6 +1384,7 @@ class RateConUploadView(APIView):
             temperature=0.2
         )
         return response.choices[0].message.content
+
 
     def _create_load_and_stops(self, data, user):
         load = Load.objects.create(
