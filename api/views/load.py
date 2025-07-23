@@ -1322,3 +1322,152 @@ class IFTAReportReprocessView(APIView):
                 {'error': f'Error reprocessing files: {str(e)}'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+        
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from apps.load.models.load import Load
+from apps.load.models.customerbroker import CustomerBroker
+from apps.load.models.stops import Stops
+from api.dto.load import LoadSerializer
+from datetime import datetime
+from apps.load.ai import RateConParser
+
+class RateConUploadView(APIView):
+    def post(self, request):
+        """Handle rate con file upload and automatic data extraction"""
+        
+        if 'file' not in request.FILES:
+            return Response({'error': 'No file provided'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        file = request.FILES['file']
+        parser = RateConParser()
+        
+        try:
+            # Extract text from file
+            text_content = parser.extract_text_from_file(file)
+            
+            # Parse with AI
+            extracted_data = parser.parse_with_ai(text_content)
+            
+            # Create Load instance
+            load_data = self._map_extracted_data_to_load(extracted_data)
+            
+            # Create or get customer/broker
+            customer_broker = self._create_or_get_customer_broker(extracted_data)
+            load_data['customer_broker'] = customer_broker.id
+            
+            # Create load
+            serializer = LoadSerializer(data=load_data)
+            if serializer.is_valid():
+                load = serializer.save(created_by=request.user)
+                
+                # Create stops (pickup and delivery)
+                self._create_stops(load, extracted_data)
+                
+                return Response({
+                    'success': True,
+                    'load_id': load.id,
+                    'extracted_data': extracted_data,
+                    'message': 'Load created successfully from rate con file'
+                }, status=status.HTTP_201_CREATED)
+            else:
+                return Response({
+                    'error': 'Invalid data',
+                    'details': serializer.errors,
+                    'extracted_data': extracted_data
+                }, status=status.HTTP_400_BAD_REQUEST)
+                
+        except Exception as e:
+            return Response({
+                'error': str(e),
+                'message': 'Failed to process rate con file'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def _map_extracted_data_to_load(self, data):
+        """Map extracted data to Load model fields"""
+        return {
+            'load_id': data.get('load_id'),
+            'reference_id': data.get('reference_id'),
+            'instructions': data.get('instructions'),
+            'pickup_date': self._parse_date(data.get('pickup_date')),
+            'delivery_date': self._parse_date(data.get('delivery_date')),
+            'pickup_location': data.get('pickup_location'),
+            'delivery_location': data.get('delivery_location'),
+            'equipment_type': self._map_equipment_type(data.get('equipment_type')),
+            'load_pay': data.get('load_pay'),
+            'mile': data.get('mile'),
+            'load_status': 'OPEN',
+            'invoice_status': 'NOT_DETERMINED'
+        }
+    
+    def _create_or_get_customer_broker(self, data):
+        """Create or get existing customer/broker"""
+        company_name = data.get('company_name')
+        if company_name:
+            broker, created = CustomerBroker.objects.get_or_create(
+                company_name=company_name,
+                defaults={
+                    'contact_number': data.get('contact_number'),
+                    'email_address': data.get('email_address'),
+                    'mc_number': data.get('mc_number')
+                }
+            )
+            return broker
+        else:
+            # Create anonymous broker
+            return CustomerBroker.objects.create(
+                company_name="Unknown Broker",
+                contact_number=data.get('contact_number'),
+                email_address=data.get('email_address')
+            )
+    
+    def _create_stops(self, load, data):
+        """Create pickup and delivery stops"""
+        if data.get('pickup_location'):
+            Stops.objects.create(
+                load=load,
+                stop_name='PICKUP',
+                location=data.get('pickup_location'),
+                appointmentdate=self._parse_date(data.get('pickup_date'))
+            )
+        
+        if data.get('delivery_location'):
+            Stops.objects.create(
+                load=load,
+                stop_name='DELIVERY', 
+                location=data.get('delivery_location'),
+                appointmentdate=self._parse_date(data.get('delivery_date'))
+            )
+    
+    def _parse_date(self, date_str):
+        """Parse date string to datetime object"""
+        if not date_str:
+            return None
+        
+        # Add your date parsing logic here
+        try:
+            return datetime.strptime(date_str, '%m/%d/%Y').date()
+        except:
+            return None
+    
+    def _map_equipment_type(self, equipment_str):
+        """Map equipment string to model choices"""
+        if not equipment_str:
+            return None
+        
+        equipment_map = {
+            'dry van': 'DRYVAN',
+            'reefer': 'REEFER',
+            'flatbed': 'FLATBED',
+            'stepdeck': 'STEPDECK',
+            'power only': 'POWERONLY'
+        }
+        
+        equipment_lower = equipment_str.lower()
+        for key, value in equipment_map.items():
+            if key in equipment_lower:
+                return value
+        
+        return 'DRYVAN'  # default

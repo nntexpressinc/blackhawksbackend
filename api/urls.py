@@ -35,6 +35,7 @@ from api.views.load import (
     IFTAReportDetailView,
     IFTAReportDownloadView,
     IFTAReportReprocessView)
+from api.views.load import RateConUploadView
 urlpatterns = [
 
     # path('amazon/upload/', amazon.upload_amazon_relay_file, name='upload_file'),
@@ -42,7 +43,8 @@ urlpatterns = [
     # path('amazon/history/', amazon.get_payment_history, name='payment_history'),
     # path('amazon/delete/<int:payment_id>/', amazon.delete_payment, name='delete_payment'),
 
-
+    # Rate Con Upload
+    path('upload-rate-con/', RateConUploadView.as_view(), name='upload_rate_con'),
     path('ifta-reports/', IFTAReportListCreateView.as_view(), name='ifta-report-list-create'),
     
     # Get, update, delete specific report

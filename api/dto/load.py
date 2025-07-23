@@ -328,3 +328,4 @@ class IFTAReportListSerializer(serializers.ModelSerializer):
             if request:
                 return request.build_absolute_uri(obj.result_file.url)
         return None
+    
