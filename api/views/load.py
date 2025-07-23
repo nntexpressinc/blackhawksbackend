@@ -1370,16 +1370,18 @@ class RateConUploadView(APIView):
             for page in doc:
                 text += page.get_text()
         return text
+    from openai import OpenAI
+    client = OpenAI(api_key="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")
 
     def _ask_ai_for_data(self, text):
-        messages = [
-            {"role": "system", "content": "You are a logistics assistant that extracts structured JSON data from shipping rate confirmation documents."},
-            {"role": "user", "content": f"Extract the following fields from the text: freight_bill, equipment, rate, pickup_address, pickup_date, pickup_note, delivery_address, delivery_date, delivery_note, total_miles. Respond only with valid JSON.{text}"}
-        ]
-        
-        response = openai.ChatCompletion.create(
+        from openai import OpenAI
+        client = OpenAI(api_key="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")
+        response = client.chat.completions.create(
             model="gpt-4-0613",
-            messages=messages,
+            messages=[
+                {"role": "system", "content": "You are a logistics assistant that extracts structured JSON data from shipping rate confirmation documents."},
+                {"role": "user", "content": f"Extract the following fields from the text: freight_bill, equipment, rate, pickup_address, pickup_date, pickup_note, delivery_address, delivery_date, delivery_note, total_miles. Respond only with valid JSON.\n\n{text}"}
+            ],
             temperature=0.2
         )
         return response.choices[0].message.content
