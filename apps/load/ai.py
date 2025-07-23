@@ -10,11 +10,12 @@ import docx
 from io import BytesIO
 import re
 from django.conf import settings
+from openai import OpenAI
 
 class RateConParser:
     def __init__(self):
-        # Set up OpenAI client
-        openai.api_key = settings.OPENAI_API_KEY
+        # Set up OpenAI client (new v1.0+ API)
+        self.client = OpenAI(api_key=settings.OPENAI_API_KEY)
         self.model = "gpt-3.5-turbo"  # or "gpt-4" for better accuracy
         
     def extract_text_from_file(self, file):
@@ -98,9 +99,9 @@ class RateConParser:
         return self._parse_with_openai(prompt)
     
     def _parse_with_openai(self, prompt):
-        """Parse using OpenAI API"""
+        """Parse using OpenAI API (v1.0+)"""
         try:
-            response = openai.ChatCompletion.create(
+            response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
                     {
@@ -121,13 +122,11 @@ class RateConParser:
             # Extract JSON from response
             return self._extract_json_from_response(ai_response)
             
-        except openai.error.OpenAIError as e:
+        except Exception as e:
             print(f"OpenAI API error: {e}")
             # Fallback to regex parsing
-            return self._fallback_regex_parsing(prompt.split("Document text:")[1])
-        except Exception as e:
-            print(f"Unexpected error: {e}")
-            return self._fallback_regex_parsing(prompt.split("Document text:")[1])
+            document_text = prompt.split("Document text:")[1] if "Document text:" in prompt else prompt
+            return self._fallback_regex_parsing(document_text)
     
     def _extract_json_from_response(self, ai_response):
         """Extract JSON from OpenAI response text"""
