@@ -1334,140 +1334,86 @@ from api.dto.load import LoadSerializer
 from datetime import datetime
 from apps.load.ai import RateConParser
 
+import openai
+import fitz  # PyMuPDF
+import json
+
+
+openai.api_key = "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"
+
 class RateConUploadView(APIView):
     def post(self, request):
-        """Handle rate con file upload and automatic data extraction"""
-        
-        if 'file' not in request.FILES:
-            return Response({'error': 'No file provided'}, status=status.HTTP_400_BAD_REQUEST)
-        
-        file = request.FILES['file']
-        parser = RateConParser()
-        
+        file = request.FILES.get('file')
+        if not file:
+            return Response({"error": "No file provided."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Read PDF text
+        pdf_text = self._extract_text_from_pdf(file)
+        if not pdf_text:
+            return Response({"error": "Unable to read PDF."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Ask AI to extract order data
         try:
-            # Extract text from file
-            text_content = parser.extract_text_from_file(file)
-            
-            # Parse with AI
-            extracted_data = parser.parse_with_ai(text_content)
-            
-            # Create Load instance
-            load_data = self._map_extracted_data_to_load(extracted_data)
-            
-            # Create or get customer/broker
-            customer_broker = self._create_or_get_customer_broker(extracted_data)
-            load_data['customer_broker'] = customer_broker.id
-            
-            # Create load
-            serializer = LoadSerializer(data=load_data)
-            if serializer.is_valid():
-                load = serializer.save(created_by=request.user)
-                
-                # Create stops (pickup and delivery)
-                self._create_stops(load, extracted_data)
-                
-                return Response({
-                    'success': True,
-                    'load_id': load.id,
-                    'extracted_data': extracted_data,
-                    'message': 'Load created successfully from rate con file'
-                }, status=status.HTTP_201_CREATED)
-            else:
-                return Response({
-                    'error': 'Invalid data',
-                    'details': serializer.errors,
-                    'extracted_data': extracted_data
-                }, status=status.HTTP_400_BAD_REQUEST)
-                
+            ai_data = self._ask_ai_for_data(pdf_text)
+            order_data = json.loads(ai_data)
         except Exception as e:
-            return Response({
-                'error': str(e),
-                'message': 'Failed to process rate con file'
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
-    def _map_extracted_data_to_load(self, data):
-        """Map extracted data to Load model fields"""
-        return {
-            'load_id': data.get('load_id'),
-            'reference_id': data.get('reference_id'),
-            'instructions': data.get('instructions'),
-            'pickup_date': self._parse_date(data.get('pickup_date')),
-            'delivery_date': self._parse_date(data.get('delivery_date')),
-            'pickup_location': data.get('pickup_location'),
-            'delivery_location': data.get('delivery_location'),
-            'equipment_type': self._map_equipment_type(data.get('equipment_type')),
-            'load_pay': data.get('load_pay'),
-            'mile': data.get('mile'),
-            'load_status': 'OPEN',
-            'invoice_status': 'NOT_DETERMINED'
-        }
-    
-    def _create_or_get_customer_broker(self, data):
-        """Create or get existing customer/broker"""
-        company_name = data.get('company_name')
-        if company_name:
-            broker, created = CustomerBroker.objects.get_or_create(
-                company_name=company_name,
-                defaults={
-                    'contact_number': data.get('contact_number'),
-                    'email_address': data.get('email_address'),
-                    'mc_number': data.get('mc_number')
-                }
-            )
-            return broker
-        else:
-            # Create anonymous broker
-            return CustomerBroker.objects.create(
-                company_name="Unknown Broker",
-                contact_number=data.get('contact_number'),
-                email_address=data.get('email_address')
-            )
-    
-    def _create_stops(self, load, data):
-        """Create pickup and delivery stops"""
-        if data.get('pickup_location'):
+            return Response({"error": "AI processing failed", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        # Create Load and Stops
+        load = self._create_load_and_stops(order_data, request.user)
+
+        return Response({"message": "Load and stops created successfully", "load_id": load.id}, status=status.HTTP_201_CREATED)
+
+    def _extract_text_from_pdf(self, file):
+        text = ""
+        with fitz.open(stream=file.read(), filetype="pdf") as doc:
+            for page in doc:
+                text += page.get_text()
+        return text
+
+    def _ask_ai_for_data(self, text):
+        messages = [
+            {"role": "system", "content": "You are a logistics assistant that extracts structured JSON data from shipping rate confirmation documents."},
+            {"role": "user", "content": f"Extract the following fields from the text: freight_bill, equipment, rate, pickup_address, pickup_date, pickup_note, delivery_address, delivery_date, delivery_note, total_miles. Respond only with valid JSON.{text}"}
+        ]
+        
+        response = openai.ChatCompletion.create(
+            model="gpt-4-0613",
+            messages=messages,
+            temperature=0.2
+        )
+        return response.choices[0].message.content
+
+    def _create_load_and_stops(self, data, user):
+        load = Load.objects.create(
+            reference_id=data.get('freight_bill'),
+            equipment_type='DRYVAN',  # Optionally map
+            load_pay=data.get('rate'),
+            total_miles=data.get('total_miles'),
+            created_by=user,
+            pickup_location=data.get('pickup_address'),
+            delivery_location=data.get('delivery_address'),
+            pickup_date=parse_datetime(data.get('pickup_date')),
+            delivery_date=parse_datetime(data.get('delivery_date')),
+            ai=True
+        )
+
+        if data.get('pickup_address'):
             Stops.objects.create(
                 load=load,
                 stop_name='PICKUP',
-                location=data.get('pickup_location'),
-                appointmentdate=self._parse_date(data.get('pickup_date'))
+                location=data['pickup_address'],
+                appointmentdate=parse_datetime(data.get('pickup_date')),
+                note=data.get('pickup_note')
             )
-        
-        if data.get('delivery_location'):
+
+        if data.get('delivery_address'):
             Stops.objects.create(
                 load=load,
-                stop_name='DELIVERY', 
-                location=data.get('delivery_location'),
-                appointmentdate=self._parse_date(data.get('delivery_date'))
+                stop_name='DELIVERY',
+                location=data['delivery_address'],
+                appointmentdate=parse_datetime(data.get('delivery_date')),
+                note=data.get('delivery_note')
             )
-    
-    def _parse_date(self, date_str):
-        """Parse date string to datetime object"""
-        if not date_str:
-            return None
-        
-        # Add your date parsing logic here
-        try:
-            return datetime.strptime(date_str, '%m/%d/%Y').date()
-        except:
-            return None
-    
-    def _map_equipment_type(self, equipment_str):
-        """Map equipment string to model choices"""
-        if not equipment_str:
-            return None
-        
-        equipment_map = {
-            'dry van': 'DRYVAN',
-            'reefer': 'REEFER',
-            'flatbed': 'FLATBED',
-            'stepdeck': 'STEPDECK',
-            'power only': 'POWERONLY'
-        }
-        
-        equipment_lower = equipment_str.lower()
-        for key, value in equipment_map.items():
-            if key in equipment_lower:
-                return value
-        
-        return 'DRYVAN'  # default
+
+        return load
