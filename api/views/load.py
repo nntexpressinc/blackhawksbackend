@@ -1332,7 +1332,6 @@ from apps.load.models.customerbroker import CustomerBroker
 from apps.load.models.stops import Stops
 from api.dto.load import LoadSerializer
 from datetime import datetime
-from openai import OpenAI
 from django.utils.dateparse import parse_datetime
 import openai
 import fitz  # PyMuPDF
@@ -1370,8 +1369,6 @@ class RateConUploadView(APIView):
             for page in doc:
                 text += page.get_text()
         return text
-    from openai import OpenAI
-    client = OpenAI(api_key="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")
 
     def _ask_ai_for_data(self, text):
         
