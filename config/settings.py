@@ -6,7 +6,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = 'django-insecure-=9d)njbv=nwa7s4n6ahqhf%rwec(zd9m0re!0+isesq%#7au7e'
 import os
-OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+OPENAI_API_KEY = 'OPENAI_API_KEY=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'
 DEBUG = True
 
 ALLOWED_HOSTS = ['*']
