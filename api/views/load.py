@@ -1332,7 +1332,6 @@ from apps.load.models.customerbroker import CustomerBroker
 from apps.load.models.stops import Stops
 from api.dto.load import LoadSerializer
 from datetime import datetime
-from apps.load.ai import RateConParser
 
 import openai
 import fitz  # PyMuPDF
