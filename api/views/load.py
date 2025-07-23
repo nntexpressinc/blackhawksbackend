@@ -1377,7 +1377,7 @@ class RateConUploadView(APIView):
 
     def _ask_ai_for_data(self, text):
         response = openai.chat.completions.create(
-            model="gpt-4-0613",
+            model="gpt-4o",
             messages=[
                 {"role": "system", "content": "You are a logistics assistant that extracts structured JSON data from shipping rate confirmation documents."},
                 {"role": "user", "content": f"Extract the following fields from the text: freight_bill, equipment, rate, pickup_address, pickup_date, pickup_note, delivery_address, delivery_date, delivery_note, total_miles. Respond only with valid JSON.\n\n{text}"}
