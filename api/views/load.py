@@ -1386,7 +1386,7 @@ class RateConUploadView(APIView):
         )
         return response.choices[0].message.content
 
-
+    
     def _create_load_and_stops(self, data, user):
         load = Load.objects.create(
             reference_id=data.get('freight_bill'),

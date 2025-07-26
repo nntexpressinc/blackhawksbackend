@@ -214,8 +214,3 @@ STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 
-if DEBUG:
-    DOMAIN_NAME = '0.0.0.0:8000' 
-else:
-    # For production environment - replace with your actual domain
-    DOMAIN_NAME = 'api1.biznes-armiya.uz'

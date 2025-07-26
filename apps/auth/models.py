@@ -106,6 +106,21 @@ class Company(models.Model):
     
 
 class Permission(models.Model):
+    dashboard = models.BooleanField(default=False)
+    loads = models.BooleanField(default=False)
+    vehicles = models.BooleanField(default=False)
+    truck = models.BooleanField(default=False)
+    trailer = models.BooleanField(default=False)
+    customer_broker = models.BooleanField(default=False)
+    driver = models.BooleanField(default=False)
+    employee = models.BooleanField(default=False)
+    dispatcher = models.BooleanField(default=False)
+    users_actives = models.BooleanField(default=False)
+    accounting = models.BooleanField(default=False)
+    manage_users = models.BooleanField(default=False)
+    manage_units = models.BooleanField(default=False)
+    manage_teams = models.BooleanField(default=False)
+    manage = models.BooleanField(default=False)
     name = models.CharField(max_length=100, unique=True)
     load_create = models.BooleanField(default=False)
     load_update = models.BooleanField(default=False)
