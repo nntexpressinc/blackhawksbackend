@@ -107,6 +107,7 @@ class Company(models.Model):
 
 class Permission(models.Model):
     dashboard = models.BooleanField(default=False)
+    ifta = models.BooleanField(default=False)
     loads = models.BooleanField(default=False)
     vehicles = models.BooleanField(default=False)
     truck = models.BooleanField(default=False)
@@ -126,6 +127,11 @@ class Permission(models.Model):
     load_update = models.BooleanField(default=False)
     load_delete = models.BooleanField(default=False)
     load_view = models.BooleanField(default=False)
+
+    ifta_create = models.BooleanField(default=False)
+    ifta_update = models.BooleanField(default=False)
+    ifta_delete = models.BooleanField(default=False)
+    ifta_view = models.BooleanField(default=False)
 
     driver_create = models.BooleanField(default=False)
     driver_update = models.BooleanField(default=False)
