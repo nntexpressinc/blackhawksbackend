@@ -189,6 +189,7 @@ class DriverExpense(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     invoice_number = models.CharField(max_length=100, blank=True, null=True)
     weekly_number = models.CharField(max_length=100, blank=True, null=True)
+    invoice_status = models.CharField(max_length=50, blank=True, null=True, default='Unpaid')
 
     def __str__(self):
         return f"{self.description} - ${self.amount} ({self.transaction_type})"
