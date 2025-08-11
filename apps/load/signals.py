@@ -88,12 +88,20 @@ def send_telegram_message(sender, instance, created, kwargs):
                 if hasattr(stop, 'appointmentdate') and stop.appointmentdate:
                     # DateTime formatini o'zgartirish
                     arrive_info = f"Date {stop.appointmentdate.strftime('%m/%d/%Y')} Time {stop.appointmentdate.strftime('%H:%M')}"
-                elif hasattr(stop, 'fcfs') and stop.fcfs:
-                    arrive_info = f"Date {stop.fcfs.strftime('%m/%d/%Y')} Time {stop.fcfs.strftime('%H:%M')}"
-                elif hasattr(stop, 'plus_hour') and stop.plus_hour:
-                    arrive_info = f"Date {stop.plus_hour.strftime('%m/%d/%Y')} Time {stop.plus_hour.strftime('%H:%M')}"
                 else:
-                    arrive_info = "FCFS"
+                    # If appointmentdate is not available, check for fcfs and plus_hour
+                    time_parts = []
+                    
+                    if hasattr(stop, 'fcfs') and stop.fcfs:
+                        time_parts.append(f"FCFS: {stop.fcfs.strftime('%m/%d/%Y %H:%M')}")
+                    
+                    if hasattr(stop, 'plus_hour') and stop.plus_hour:
+                        time_parts.append(f"Plus Hour: {stop.plus_hour.strftime('%m/%d/%Y %H:%M')}")
+                    
+                    if time_parts:
+                        arrive_info = " | ".join(time_parts)
+                    else:
+                        arrive_info = "FCFS"
                 
                 # Reference ID ni olish
                 ref_number = ""
