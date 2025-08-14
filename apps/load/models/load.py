@@ -56,6 +56,7 @@ class Load(models.Model):
         ('IN_YARD', 'In Yard'),
         ('DELIVERED', 'Delivered'),
         ('COMPLETED', 'Completed'),
+        ('CANCELED', 'Canceled'),
         )
     INVOICE_STATUS_CHOICES = (
         ('NOT_DETERMINED', 'Not Determined'),
