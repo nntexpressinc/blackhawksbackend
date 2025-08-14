@@ -64,7 +64,7 @@ class Stops(models.Model):
         ('WY', 'Wyoming'),
     ]
     load = models.ForeignKey(Load, on_delete=models.CASCADE, related_name='stops', blank=True, null=True)
-    stop_name = models.CharField(max_length=20, choices=STOP_NAME_CHOICES, blank=True, null=True)
+    stop_name = models.CharField(blank=True, null=True)
     company_name = models.CharField(max_length=50, blank=True, null=True)
     contact_name = models.CharField(max_length=50, blank=True, null=True)
     reference_id = models.CharField(max_length=50, blank=True, null=True)
