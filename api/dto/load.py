@@ -184,10 +184,8 @@ class FuelTaxRateSerializer(serializers.ModelSerializer):
 
 
 class BulkFuelTaxRateSerializer(serializers.Serializer):
-    quarter = serializers.CharField()
-    rates = serializers.ListField(
-        child=serializers.DictField()
-    )
+    excel_file = serializers.FileField(required=True)
+    quarter = serializers.CharField(required=True)
     
     def validate_rates(self, value):
         """Validate that each rate entry has the correct structure"""
@@ -199,16 +197,18 @@ class BulkFuelTaxRateSerializer(serializers.Serializer):
                 if 'rate' not in rate_info:
                     raise serializers.ValidationError(f"Rate is required for {state}")
                 
+                if 'mpg' not in rate_info:
+                    raise serializers.ValidationError(f"MPG is required for {state}")
+                
                 try:
                     float(rate_info['rate'])
                 except (ValueError, TypeError):
                     raise serializers.ValidationError(f"Rate for {state} must be a valid number")
                 
-                if 'mpg' in rate_info and rate_info['mpg'] is not None:
-                    try:
-                        float(rate_info['mpg'])
-                    except (ValueError, TypeError):
-                        raise serializers.ValidationError(f"MPG for {state} must be a valid number")
+                try:
+                    float(rate_info['mpg'])
+                except (ValueError, TypeError):
+                    raise serializers.ValidationError(f"MPG for {state} must be a valid number")
         
         return value
     

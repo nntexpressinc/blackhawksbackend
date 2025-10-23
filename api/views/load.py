@@ -1065,26 +1065,61 @@ class FuelTaxRateViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'])
     def bulk_create(self, request):
         """
-        Create multiple fuel tax rates for all states in a single request
-        Expected format:
-        {
-            "quarter": "Quarter 1",
-            "rates": [
-                {
-                    "AL": {"rate": 0.285, "mpg": 7.5},
-                    "AK": {"rate": 0.195, "mpg": 8.0}
-                }
-            ]
-        }
+        Create multiple fuel tax rates from Excel file
+        Required fields:
+        - excel_file: Excel file with columns State, MPG, Rate
+        - quarter: Quarter (e.g., "Quarter 1")
         """
-        serializer = BulkFuelTaxRateSerializer(data=request.data)
-        if serializer.is_valid():
-            created_rates = serializer.save()
+        try:
+            serializer = BulkFuelTaxRateSerializer(data=request.data)
+            if serializer.is_valid():
+                excel_file = serializer.validated_data['excel_file']
+                quarter = serializer.validated_data['quarter']
+                
+                # Read Excel file
+                import pandas as pd
+                df = pd.read_excel(excel_file)
+                
+                # Validate columns
+                required_columns = ['State', 'MPG', 'Rate']
+                if not all(col in df.columns for col in required_columns):
+                    return Response(
+                        {'error': 'Excel file must contain State, MPG, and Rate columns'}, 
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                # Get current year
+                current_year = datetime.datetime.now().year
+                
+                # Update or create FuelTaxRate objects
+                created_rates = []
+                for _, row in df.iterrows():
+                    state = row['State']
+                    mpg = row['MPG']
+                    rate = row['Rate']
+                    
+                    fuel_tax_rate, _ = FuelTaxRate.objects.update_or_create(
+                        quarter=quarter,
+                        state=state,
+                        defaults={
+                            'mpg': mpg,
+                            'rate': rate,
+                            'year': current_year,
+                            'excel_file': excel_file
+                        }
+                    )
+                    created_rates.append(fuel_tax_rate)
+                
+                return Response(
+                    FuelTaxRateSerializer(created_rates, many=True).data,
+                    status=status.HTTP_201_CREATED
+                )
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
             return Response(
-                FuelTaxRateSerializer(created_rates, many=True).data,
-                status=status.HTTP_201_CREATED
+                {'error': str(e)}, 
+                status=status.HTTP_400_BAD_REQUEST
             )
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     @action(detail=False, methods=['get'])
     def by_quarter(self, request):
