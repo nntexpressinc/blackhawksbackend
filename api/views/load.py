@@ -8,6 +8,7 @@ from django.db.models import Sum, Q, Min, Max
 from decimal import Decimal
 from rest_framework.pagination import PageNumberPagination
 from django.core.files.base import ContentFile
+import pandas as pd
 
 from apps.load.models.ifta import Ifta, FuelTaxRate
 from apps.load.models.driver import Pay, DriverPay, DriverExpense
