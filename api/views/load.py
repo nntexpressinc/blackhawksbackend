@@ -1011,7 +1011,7 @@ from rest_framework.decorators import action
 from django.db.models import Q
 from collections import defaultdict
 import pandas as pd
-import datetime
+from datetime import datetime
 
 class FuelTaxRateViewSet(viewsets.ModelViewSet):
     queryset = FuelTaxRate.objects.all()
@@ -1046,8 +1046,8 @@ class FuelTaxRateViewSet(viewsets.ModelViewSet):
                 )
             
             # Get current year and quarter from request or use current
-            current_year = datetime.datetime.now().year
-            quarter = request.data.get('quarter', f'Q{(datetime.datetime.now().month - 1) // 3 + 1}')
+            current_year = datetime.now().year
+            quarter = request.data.get('quarter', f'Q{(datetime.now().month - 1) // 3 + 1}')
             
             # Update or create FuelTaxRate objects
             updated_rates = []
@@ -1144,7 +1144,7 @@ class FuelTaxRateViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            current_year = datetime.datetime.now().year
+            current_year = datetime.now().year
             
             # Update or create FuelTaxRate objects
             created_rates = []
