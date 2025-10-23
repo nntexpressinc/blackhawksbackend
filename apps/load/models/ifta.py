@@ -9,7 +9,7 @@ class FuelTaxRate(models.Model):
         ('Quarter 3', 'Quarter 3'),
         ('Quarter 4', 'Quarter 4'),
     ], default='Quarter 1')
-    state = models.CharField(max_length=15, choices=[
+    state = models.CharField(max_length=15, blank=True, null=True, choices=[
         ('AL', 'Alabama'),
         ('AK', 'Alaska'),
         ('AZ', 'Arizona'),
@@ -62,7 +62,7 @@ class FuelTaxRate(models.Model):
         ('WI', 'Wisconsin'),
         ('WY', 'Wyoming'), 
     ])
-    rate = models.DecimalField(max_digits=5, decimal_places=3)  # Masalan, 0.285
+    rate = models.DecimalField(max_digits=5, decimal_places=3, blank=True, null=True)  # Masalan, 0.285
     mpg = models.DecimalField(max_digits=5, decimal_places=3, null=True, blank=True)  # Masalan, 0.285
     year = models.IntegerField(null=True, blank=True)  # Yilni saqlash uchun
     def save(self, *args, **kwargs):
