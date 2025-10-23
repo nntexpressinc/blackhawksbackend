@@ -1004,6 +1004,15 @@ from collections import defaultdict
 
 
 
+from rest_framework import viewsets, status
+from rest_framework.response import Response
+from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.decorators import action
+from django.db.models import Q
+from collections import defaultdict
+import pandas as pd
+import datetime
+
 class FuelTaxRateViewSet(viewsets.ModelViewSet):
     queryset = FuelTaxRate.objects.all()
     serializer_class = FuelTaxRateSerializer
@@ -1013,134 +1022,184 @@ class FuelTaxRateViewSet(viewsets.ModelViewSet):
     def upload_excel(self, request):
         """
         Upload an Excel file to update fuel tax rates
-        The Excel file should have columns: State, MPG, Rate
+        The Excel file should have columns: State, Rate (MPG is optional)
         """
         try:
             excel_file = request.FILES.get('excel_file')
             if not excel_file:
                 return Response({'error': 'No file provided'}, status=status.HTTP_400_BAD_REQUEST)
             
-            import pandas as pd
-            import datetime
-            
-            # Read Excel file
+            # Read Excel file with header
             df = pd.read_excel(excel_file)
             
-            # Validate columns
-            required_columns = ['State', 'MPG', 'Rate']
-            if not all(col in df.columns for col in required_columns):
+            print(f"DEBUG: Columns detected: {df.columns.tolist()}")
+            print(f"DEBUG: Shape: {df.shape}")
+            
+            # Validate required columns
+            required_columns = ['State', 'Rate']
+            missing_columns = [col for col in required_columns if col not in df.columns]
+            
+            if missing_columns:
                 return Response(
-                    {'error': 'Excel file must contain State, MPG, and Rate columns'}, 
+                    {'error': f'Excel file must contain these columns: {", ".join(required_columns)}. Missing: {", ".join(missing_columns)}'}, 
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Get current year
+            # Get current year and quarter from request or use current
             current_year = datetime.datetime.now().year
+            quarter = request.data.get('quarter', f'Q{(datetime.datetime.now().month - 1) // 3 + 1}')
             
             # Update or create FuelTaxRate objects
             updated_rates = []
-            for _, row in df.iterrows():
-                state = row['State']
-                mpg = row['MPG']
-                rate = row['Rate']
-                
-                fuel_tax_rate, created = FuelTaxRate.objects.update_or_create(
-                    state=state,
-                    defaults={
-                        'mpg': mpg,
-                        'rate': rate,
-                        'year': current_year,
-                        'excel_file': excel_file
-                    }
-                )
-                updated_rates.append(fuel_tax_rate)
+            errors = []
             
-            return Response(
-                FuelTaxRateSerializer(updated_rates, many=True).data,
-                status=status.HTTP_200_OK
-            )
+            for index, row in df.iterrows():
+                try:
+                    state = str(row['State']).strip()
+                    
+                    # Skip empty rows
+                    if not state or pd.isna(state):
+                        continue
+                    
+                    rate = float(row['Rate'])
+                    
+                    # MPG optional - use default if not provided
+                    mpg = float(row.get('MPG', 0)) if 'MPG' in df.columns else 0
+                    
+                    fuel_tax_rate, created = FuelTaxRate.objects.update_or_create(
+                        quarter=quarter,
+                        state=state,
+                        defaults={
+                            'mpg': mpg,
+                            'rate': rate,
+                            'year': current_year,
+                            'excel_file': excel_file
+                        }
+                    )
+                    updated_rates.append(fuel_tax_rate)
+                    
+                except (ValueError, TypeError) as e:
+                    errors.append(f'Row {index + 2}: Invalid data - {str(e)}')
+                    continue
+            
+            if not updated_rates:
+                return Response(
+                    {'error': 'No valid data found in Excel file. Errors: ' + '; '.join(errors)}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            response_data = {
+                'message': f'Successfully created/updated {len(updated_rates)} fuel tax rates',
+                'quarter': quarter,
+                'year': current_year,
+                'count': len(updated_rates),
+                'data': FuelTaxRateSerializer(updated_rates, many=True).data
+            }
+            
+            if errors:
+                response_data['warnings'] = errors
+            
+            return Response(response_data, status=status.HTTP_200_OK)
             
         except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {'error': f'Failed to process Excel file: {str(e)}'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
     
     @action(detail=False, methods=['post'])
     def bulk_create(self, request):
         """
         Create multiple fuel tax rates from Excel file
         Required fields:
-        - excel_file: Excel file with columns State, MPG, Rate
-        - quarter: Quarter (e.g., "Quarter 1")
+        - excel_file: Excel file with columns State, Rate (MPG optional)
+        - quarter: Quarter (e.g., "Q1", "Quarter 1")
         """
         try:
-            serializer = BulkFuelTaxRateSerializer(data=request.data)
-            if serializer.is_valid():
-                excel_file = serializer.validated_data['excel_file']
-                quarter = serializer.validated_data['quarter']
-
-                # Read Excel file
-                df = pd.read_excel(excel_file, header=None)
-
-                # Log detected columns for debugging
-                detected_columns = df.columns.tolist()
-                print(f"DEBUG: Detected columns in Excel file: {detected_columns}")
-
-                # Validate that we have at least 3 columns
-                if len(df.columns) < 3:
-                    return Response(
-                        {'error': 'Excel file must have at least 3 columns (State in A, Rate in B, MPG in C)'}, 
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-                
-                # Rename columns for easier processing
-                df.columns = ['State', 'Rate', 'MPG'] + [f'col_{i}' for i in range(3, len(df.columns))]
-                
-                # Get current year
-                current_year = datetime.datetime.now().year
-                
-                # Update or create FuelTaxRate objects
-                created_rates = []
-                for _, row in df.iterrows():
-                    try:
-                        state = str(row['State']).strip()
-                        rate = float(row['Rate'])
-                        mpg = float(row['MPG'])
-                    
-                        # Skip empty rows
-                        if not state or pd.isna(state):
-                            continue
-                            
-                        # Create or update the record
-                        fuel_tax_rate, _ = FuelTaxRate.objects.update_or_create(
-                            quarter=quarter,
-                            state=state,
-                            defaults={
-                                'mpg': mpg,
-                                'rate': rate,
-                                'year': current_year,
-                                'excel_file': excel_file
-                            }
-                        )
-                        created_rates.append(fuel_tax_rate)
-                    except (ValueError, TypeError) as e:
-                        return Response(
-                            {'error': f'Invalid data in row for state {state}: Rate and MPG must be numbers'}, 
-                            status=status.HTTP_400_BAD_REQUEST
-                        )
-                
-                if not created_rates:
-                    return Response(
-                        {'error': 'No valid data found in Excel file'}, 
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-                
+            excel_file = request.FILES.get('excel_file')
+            quarter = request.data.get('quarter')
+            
+            if not excel_file:
                 return Response(
-                    FuelTaxRateSerializer(created_rates, many=True).data,
-                    status=status.HTTP_201_CREATED
+                    {'error': 'No excel_file provided'}, 
+                    status=status.HTTP_400_BAD_REQUEST
                 )
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            
+            if not quarter:
+                return Response(
+                    {'error': 'Quarter parameter is required'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Read Excel file with proper header
+            df = pd.read_excel(excel_file)
+            
+            print(f"DEBUG: Columns detected: {df.columns.tolist()}")
+            print(f"DEBUG: Shape: {df.shape}")
+            
+            # Validate that we have at least State and Rate columns
+            if 'State' not in df.columns or 'Rate' not in df.columns:
+                return Response(
+                    {'error': 'Excel file must have "State" and "Rate" columns'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            current_year = datetime.datetime.now().year
+            
+            # Update or create FuelTaxRate objects
+            created_rates = []
+            errors = []
+            
+            for index, row in df.iterrows():
+                try:
+                    state = str(row['State']).strip()
+                    
+                    # Skip empty rows
+                    if not state or pd.isna(state):
+                        continue
+                    
+                    rate = float(row['Rate'])
+                    mpg = float(row['MPG']) if 'MPG' in df.columns and pd.notna(row['MPG']) else 0
+                
+                    # Create or update the record
+                    fuel_tax_rate, _ = FuelTaxRate.objects.update_or_create(
+                        quarter=quarter,
+                        state=state,
+                        defaults={
+                            'mpg': mpg,
+                            'rate': rate,
+                            'year': current_year,
+                            'excel_file': excel_file
+                        }
+                    )
+                    created_rates.append(fuel_tax_rate)
+                    
+                except (ValueError, TypeError) as e:
+                    errors.append(f'Row {index + 2} (State: {state}): {str(e)}')
+                    continue
+            
+            if not created_rates:
+                return Response(
+                    {'error': f'No valid data found in Excel file. Errors: {"; ".join(errors)}'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            response_data = {
+                'message': f'Successfully created/updated {len(created_rates)} records',
+                'quarter': quarter,
+                'year': current_year,
+                'count': len(created_rates),
+                'data': FuelTaxRateSerializer(created_rates, many=True).data
+            }
+            
+            if errors:
+                response_data['warnings'] = errors
+            
+            return Response(response_data, status=status.HTTP_201_CREATED)
+            
         except Exception as e:
             return Response(
-                {'error': str(e)}, 
+                {'error': f'Failed to process Excel file: {str(e)}'}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
     
@@ -1183,6 +1242,117 @@ class FuelTaxRateViewSet(viewsets.ModelViewSet):
         
         return Response(
             FuelTaxRateSerializer(updated_rates, many=True).data,
+            status=status.HTTP_200_OK
+        )
+
+
+class IftaViewSet(viewsets.ModelViewSet):
+    queryset = Ifta.objects.all()
+    serializer_class = IftaSerializer
+    
+    def get_queryset(self):
+        queryset = Ifta.objects.select_related('fuel_tax_rate', 'driver').all()
+        quarter = self.request.query_params.get('quarter')
+        driver = self.request.query_params.get('driver')
+        weekly_number = self.request.query_params.get('weekly_number')
+        
+        if quarter:
+            queryset = queryset.filter(quarter=quarter)
+        if driver:
+            queryset = queryset.filter(driver=driver)
+        if weekly_number:
+            queryset = queryset.filter(weekly_number=weekly_number)
+        
+        return queryset
+    
+    @action(detail=False, methods=['post'])
+    def bulk_create(self, request):
+        """
+        Create multiple IFTA records for all states in a single request
+        Expected format:
+        {
+            "quarter": "Q1",
+            "weekly_number": 1,
+            "driver": 1,
+            "ifta_records": [
+                {
+                    "state": "AL",
+                    "total_miles": 1000,
+                    "tax_paid_gallon": 50,
+                    "invoice_number": "INV-001"
+                }
+            ]
+        }
+        """
+        serializer = BulkIftaSerializer(data=request.data)
+        if serializer.is_valid():
+            created_records = serializer.save()
+            return Response(
+                IftaSerializer(created_records, many=True).data,
+                status=status.HTTP_201_CREATED
+            )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=False, methods=['get'])
+    def by_quarter_and_driver(self, request):
+        """
+        Get IFTA records grouped by quarter and driver
+        """
+        quarter = request.query_params.get('quarter')
+        driver_id = request.query_params.get('driver')
+        weekly_number = request.query_params.get('weekly_number')
+        
+        filters = Q()
+        if quarter:
+            filters &= Q(quarter=quarter)
+        if driver_id:
+            filters &= Q(driver_id=driver_id)
+        if weekly_number:
+            filters &= Q(weekly_number=weekly_number)
+        
+        records = Ifta.objects.filter(filters).select_related('fuel_tax_rate', 'driver')
+        
+        grouped_data = defaultdict(lambda: defaultdict(list))
+        for record in records:
+            grouped_data[record.quarter][record.driver.name].append(
+                IftaSerializer(record).data
+            )
+        
+        return Response(dict(grouped_data))
+    
+    @action(detail=False, methods=['put'])
+    def bulk_update(self, request):
+        """
+        Update multiple IFTA records
+        """
+        quarter = request.data.get('quarter')
+        driver_id = request.data.get('driver')
+        weekly_number = request.data.get('weekly_number')
+        ifta_records_data = request.data.get('ifta_records', [])
+        
+        updated_records = []
+        for record_data in ifta_records_data:
+            try:
+                ifta_record = Ifta.objects.get(
+                    quarter=quarter,
+                    state=record_data['state'],
+                    driver_id=driver_id,
+                    weekly_number=weekly_number
+                )
+                
+                # Update fields
+                ifta_record.total_miles = record_data.get('total_miles', ifta_record.total_miles)
+                ifta_record.tax_paid_gallon = record_data.get('tax_paid_gallon', ifta_record.tax_paid_gallon)
+                ifta_record.invoice_number = record_data.get('invoice_number', ifta_record.invoice_number)
+                
+                ifta_record.save()  # This will trigger the signal for recalculation
+                updated_records.append(ifta_record)
+                
+            except Ifta.DoesNotExist:
+                continue
+        
+        return Response(
+            IftaSerializer(updated_records, many=True).data,
             status=status.HTTP_200_OK
         )
 
