@@ -2,6 +2,7 @@ from django.db import models
 
 from apps.load.models.driver import Driver
 class FuelTaxRate(models.Model):
+    excel_file = models.FileField(upload_to='fuel_tax_rates/', null=True, blank=True)
     quarter = models.CharField(max_length=10, choices=[
         ('Quarter 1', 'Quarter 1'),
         ('Quarter 2', 'Quarter 2'),

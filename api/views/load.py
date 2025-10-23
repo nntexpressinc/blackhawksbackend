@@ -1005,6 +1005,61 @@ from collections import defaultdict
 class FuelTaxRateViewSet(viewsets.ModelViewSet):
     queryset = FuelTaxRate.objects.all()
     serializer_class = FuelTaxRateSerializer
+    parser_classes = (MultiPartParser, FormParser)
+    
+    @action(detail=False, methods=['post'])
+    def upload_excel(self, request):
+        """
+        Upload an Excel file to update fuel tax rates
+        The Excel file should have columns: State, MPG, Rate
+        """
+        try:
+            excel_file = request.FILES.get('excel_file')
+            if not excel_file:
+                return Response({'error': 'No file provided'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            import pandas as pd
+            import datetime
+            
+            # Read Excel file
+            df = pd.read_excel(excel_file)
+            
+            # Validate columns
+            required_columns = ['State', 'MPG', 'Rate']
+            if not all(col in df.columns for col in required_columns):
+                return Response(
+                    {'error': 'Excel file must contain State, MPG, and Rate columns'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Get current year
+            current_year = datetime.datetime.now().year
+            
+            # Update or create FuelTaxRate objects
+            updated_rates = []
+            for _, row in df.iterrows():
+                state = row['State']
+                mpg = row['MPG']
+                rate = row['Rate']
+                
+                fuel_tax_rate, created = FuelTaxRate.objects.update_or_create(
+                    state=state,
+                    defaults={
+                        'mpg': mpg,
+                        'rate': rate,
+                        'year': current_year,
+                        'excel_file': excel_file
+                    }
+                )
+                updated_rates.append(fuel_tax_rate)
+            
+            return Response(
+                FuelTaxRateSerializer(updated_rates, many=True).data,
+                status=status.HTTP_200_OK
+            )
+            
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
     
     @action(detail=False, methods=['post'])
     def bulk_create(self, request):
