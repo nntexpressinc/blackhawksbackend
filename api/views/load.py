@@ -1075,11 +1075,14 @@ class FuelTaxRateViewSet(viewsets.ModelViewSet):
             if serializer.is_valid():
                 excel_file = serializer.validated_data['excel_file']
                 quarter = serializer.validated_data['quarter']
-                
+
                 # Read Excel file
-                import pandas as pd
                 df = pd.read_excel(excel_file, header=None)
-                
+
+                # Log detected columns for debugging
+                detected_columns = df.columns.tolist()
+                print(f"DEBUG: Detected columns in Excel file: {detected_columns}")
+
                 # Validate that we have at least 3 columns
                 if len(df.columns) < 3:
                     return Response(
