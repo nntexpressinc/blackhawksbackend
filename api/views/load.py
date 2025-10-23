@@ -1078,15 +1078,17 @@ class FuelTaxRateViewSet(viewsets.ModelViewSet):
                 
                 # Read Excel file
                 import pandas as pd
-                df = pd.read_excel(excel_file)
+                df = pd.read_excel(excel_file, header=None)
                 
-                # Validate columns
-                required_columns = ['State', 'MPG', 'Rate']
-                if not all(col in df.columns for col in required_columns):
+                # Validate that we have at least 3 columns
+                if len(df.columns) < 3:
                     return Response(
-                        {'error': 'Excel file must contain State, MPG, and Rate columns'}, 
+                        {'error': 'Excel file must have at least 3 columns (State in A, Rate in B, MPG in C)'}, 
                         status=status.HTTP_400_BAD_REQUEST
                     )
+                
+                # Rename columns for easier processing
+                df.columns = ['State', 'Rate', 'MPG'] + [f'col_{i}' for i in range(3, len(df.columns))]
                 
                 # Get current year
                 current_year = datetime.datetime.now().year
@@ -1094,21 +1096,38 @@ class FuelTaxRateViewSet(viewsets.ModelViewSet):
                 # Update or create FuelTaxRate objects
                 created_rates = []
                 for _, row in df.iterrows():
-                    state = row['State']
-                    mpg = row['MPG']
-                    rate = row['Rate']
+                    try:
+                        state = str(row['State']).strip()
+                        rate = float(row['Rate'])
+                        mpg = float(row['MPG'])
                     
-                    fuel_tax_rate, _ = FuelTaxRate.objects.update_or_create(
-                        quarter=quarter,
-                        state=state,
-                        defaults={
-                            'mpg': mpg,
-                            'rate': rate,
-                            'year': current_year,
-                            'excel_file': excel_file
-                        }
+                        # Skip empty rows
+                        if not state or pd.isna(state):
+                            continue
+                            
+                        # Create or update the record
+                        fuel_tax_rate, _ = FuelTaxRate.objects.update_or_create(
+                            quarter=quarter,
+                            state=state,
+                            defaults={
+                                'mpg': mpg,
+                                'rate': rate,
+                                'year': current_year,
+                                'excel_file': excel_file
+                            }
+                        )
+                        created_rates.append(fuel_tax_rate)
+                    except (ValueError, TypeError) as e:
+                        return Response(
+                            {'error': f'Invalid data in row for state {state}: Rate and MPG must be numbers'}, 
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+                
+                if not created_rates:
+                    return Response(
+                        {'error': 'No valid data found in Excel file'}, 
+                        status=status.HTTP_400_BAD_REQUEST
                     )
-                    created_rates.append(fuel_tax_rate)
                 
                 return Response(
                     FuelTaxRateSerializer(created_rates, many=True).data,
